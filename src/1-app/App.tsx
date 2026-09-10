@@ -26,10 +26,10 @@ import Accounts from '2-pages/Accounts'
 import { GlobalWidgets } from './GlobalWidgets'
 
 const About = lazy(() => import('2-pages/About'))
-const Donation = lazy(() => import('2-pages/Donation'))
 const Token = lazy(() => import('2-pages/Token'))
 const Stats = lazy(() => import('2-pages/Stats'))
 const Review = lazy(() => import('2-pages/Review'))
+const Rules = lazy(() => import('2-pages/Rules'))
 
 const history = createBrowserHistory()
 
@@ -48,7 +48,6 @@ export default function App() {
   const publicRoutes = [
     <Route key="about" path="/about" component={About} />,
     <Route key="about/*" path="/about/*" component={About} />,
-    <Route key="donation" path="/donation" component={Donation} />,
   ]
 
   const notLoggedIn = [
@@ -70,6 +69,7 @@ export default function App() {
     <Route key="accounts" path="/accounts" component={Accounts} />,
     <Route key="budget" path="/budget" component={Budgets} />,
     <Route key="stats" path="/stats" component={Stats} />,
+    <Route key="rules" path="/rules" component={Rules} />,
     <Route key="*" path="*" render={() => <Redirect to="/budget" />} />,
   ]
 

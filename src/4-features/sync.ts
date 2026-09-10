@@ -12,6 +12,7 @@ import { getDiff, applyServerPatch } from 'store/data'
 import { keys } from '6-shared/helpers/keys'
 import { TDiff } from '6-shared/types'
 import { zmPreferenceStorage } from '6-shared/api/zmPreferenceStorage'
+import { ruleModel } from '5-entities/rule'
 
 /** All syncs with zenmoney goes through this thunk */
 export const syncData = (): AppThunk => async (dispatch, getState) => {
@@ -41,6 +42,9 @@ export const syncData = (): AppThunk => async (dispatch, getState) => {
 
     const data = response.data
     dispatch(applyServerPatch({ ...data, syncStartTime }))
+    // Freshly arrived transactions get their categories from the rules right
+    // away, so the user never sees a wrong one.
+    dispatch(ruleModel.runAllRules())
     const changedDomains = getChangedDomains(data)
     dispatch(saveDataLocally(changedDomains))
     console.log(`✅ Data synced ${formatDate(new Date(), 'HH:mm:ss')}`)

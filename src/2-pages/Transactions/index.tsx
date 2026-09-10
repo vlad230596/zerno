@@ -50,7 +50,6 @@ export default function TransactionsView() {
       <Helmet>
         <title>{t('pageTitle')}</title>
         <meta name="description" content={t('pageDescription')} />
-        <link rel="canonical" href="https://zerro.app/transactions" />
       </Helmet>
       <Box
         sx={{

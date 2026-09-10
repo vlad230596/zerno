@@ -16,10 +16,10 @@ import {
 import {
   AccountBalanceIcon,
   HelpOutlineIcon,
-  FavoriteBorderIcon,
   SyncAltIcon,
   WhatshotIcon,
   BarChartIcon,
+  AutoAwesomeIcon,
 } from '6-shared/ui/Icons'
 import { Logo } from '6-shared/ui/Logo'
 import { useAppTheme } from '6-shared/ui/theme'
@@ -137,6 +137,11 @@ function Links() {
       />
       <NavigationLink text={t('stats')} path="/stats" icon={<BarChartIcon />} />
       <NavigationLink
+        text={t('rules')}
+        path="/rules"
+        icon={<AutoAwesomeIcon />}
+      />
+      <NavigationLink
         text={t('yearWrapped')}
         path="/review"
         icon={<WhatshotIcon />}
@@ -145,11 +150,6 @@ function Links() {
         text={t('about')}
         path="/about"
         icon={<HelpOutlineIcon />}
-      />
-      <NavigationLink
-        text={t('donate')}
-        path="/donation"
-        icon={<FavoriteBorderIcon />}
       />
     </List>
   )

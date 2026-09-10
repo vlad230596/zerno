@@ -6,8 +6,6 @@ import {
   Fade,
   Stack,
   ButtonOwnProps,
-  Typography,
-  ButtonBase,
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { useAppTheme } from '6-shared/ui/theme'
@@ -67,7 +65,7 @@ export default function Auth() {
         minHeight: '100vh',
       }}
     >
-      <Logo width="200" fill={theme.palette.primary.main} visible={logoIn} />
+      <Logo width="170" fill={theme.palette.primary.main} visible={logoIn} />
       <Stack
         spacing={3}
         sx={{ justifyContent: 'center', alignItems: 'center' }}
@@ -80,33 +78,6 @@ export default function Auth() {
             onClick={() => dispatch(logIn('ru'))}
             children={t('btnLogin')}
           />
-        </Fade>
-
-        <Fade in timeout={2000}>
-          <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-            {t('haveTrouble')}{' '}
-            <ButtonBase
-              onClick={() => dispatch(logIn('app'))}
-              sx={{
-                p: 1,
-                m: -1,
-                verticalAlign: 'baseline',
-                fontSize: 'inherit',
-                fontWeight: 'inherit',
-                lineHeight: 'inherit',
-                borderRadius: 1,
-                color: theme.palette.primary.main,
-                '&:hover': {
-                  color: theme.palette.secondary.main,
-                },
-                '&:focus': {
-                  color: theme.palette.secondary.main,
-                },
-              }}
-            >
-              {t('btnAlternativeSignIn')}
-            </ButtonBase>
-          </Typography>
         </Fade>
 
         <Fade in timeout={3000}>

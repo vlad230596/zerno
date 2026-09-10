@@ -3,6 +3,7 @@ import React, { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import styled from '@emotion/styled'
 import { Typography } from '@mui/material'
+import { formatDate } from '6-shared/helpers/date'
 import { TagIcon } from '6-shared/ui/TagIcon'
 import { Tooltip } from '6-shared/ui/Tooltip'
 import { useAppSelector } from 'store'
@@ -71,8 +72,11 @@ export const Symbol: FC<SymbolProps> = ({
   }
 }
 
-export const Tags: FC<TrElementProps> = ({ tr, trType, ...rest }) => {
+type TagsProps = TrElementProps & { onTagClick?: (name: string) => void }
+
+export const Tags: FC<TagsProps> = ({ tr, trType, onTagClick, ...rest }) => {
   const { t } = useTranslation()
+  const { t: tSearch } = useTranslation('transactionSearch')
   const tags = tagModel.usePopulatedTags()
   switch (trType) {
     case 'income':
@@ -80,15 +84,34 @@ export const Tags: FC<TrElementProps> = ({ tr, trType, ...rest }) => {
       if (!tr.tag?.length)
         return (
           <TagsWrapper {...rest}>
-            <NoCategory>{t('noCategory')}</NoCategory>
+            <Clickable
+              onClick={
+                onTagClick
+                  ? () => onTagClick(tSearch('keywordNoTag'))
+                  : undefined
+              }
+            >
+              <NoCategory>{t('noCategory')}</NoCategory>
+            </Clickable>
           </TagsWrapper>
         )
       else
         return (
           <TagsWrapper {...rest}>
-            {tr.tag.map(id => (
-              <span key={id}>{tags[id]?.name}</span>
-            ))}
+            {tr.tag.map(id => {
+              const tag = tags[id]
+              const name = tag?.uniqueName || tag?.name
+              return (
+                <Clickable
+                  key={id}
+                  onClick={
+                    name && onTagClick ? () => onTagClick(name) : undefined
+                  }
+                >
+                  {tag?.name}
+                </Clickable>
+              )
+            })}
           </TagsWrapper>
         )
     case 'transfer':
@@ -192,16 +215,25 @@ export const Amounts: FC<TrElementProps> = ({ tr, trType, ...rest }) => {
   }
 }
 
-type InfoProps = TrElementProps & { onFilterByPayee?: (payee: string) => void }
+type InfoProps = TrElementProps & {
+  showDate?: boolean
+  onFilterByPayee?: (payee: string) => void
+}
+
+type AccountsProps = InfoProps & {
+  onAccountClick?: (accountTitle: string) => void
+}
 
 export const Info: FC<InfoProps> = ({
   tr,
   trType,
+  showDate,
   onFilterByPayee,
   ...rest
 }) => {
   return (
     <InfoWrapper>
+      {showDate && <DateLabel>{formatDate(tr.date, 'd MMM yyyy')}</DateLabel>}
       {trType !== 'incomeDebt' && trType !== 'outcomeDebt' && (
         <Payee
           payee={tr.payee}
@@ -214,36 +246,37 @@ export const Info: FC<InfoProps> = ({
   )
 }
 
-export const Accounts: FC<InfoProps> = ({
+export const Accounts: FC<AccountsProps> = ({
   tr,
   trType,
   onFilterByPayee,
+  onAccountClick,
   ...rest
 }) => {
   switch (trType) {
     case 'income':
       return (
         <div>
-          <Account id={tr.incomeAccount} />
+          <Account id={tr.incomeAccount} onClick={onAccountClick} />
         </div>
       )
     case 'outcome':
       return (
         <div>
-          <Account id={tr.outcomeAccount} />
+          <Account id={tr.outcomeAccount} onClick={onAccountClick} />
         </div>
       )
     case 'transfer':
       return (
         <AmountsWrapper type="transfer" {...rest}>
-          <Account id={tr.outcomeAccount} />
-          <Account id={tr.incomeAccount} />
+          <Account id={tr.outcomeAccount} onClick={onAccountClick} />
+          <Account id={tr.incomeAccount} onClick={onAccountClick} />
         </AmountsWrapper>
       )
     case 'outcomeDebt':
       return (
         <AmountsWrapper type="transfer" {...rest}>
-          <Account id={tr.outcomeAccount} />
+          <Account id={tr.outcomeAccount} onClick={onAccountClick} />
           <Payee
             payee={tr.payee}
             merchant={tr.merchant}
@@ -259,7 +292,7 @@ export const Accounts: FC<InfoProps> = ({
             merchant={tr.merchant}
             onClick={onFilterByPayee}
           />
-          <Account id={tr.incomeAccount} />
+          <Account id={tr.incomeAccount} onClick={onAccountClick} />
         </AmountsWrapper>
       )
     default:
@@ -267,9 +300,38 @@ export const Accounts: FC<InfoProps> = ({
   }
 }
 
-const Account: FC<{ id: string }> = ({ id, ...rest }) => {
+const Account: FC<{ id: string; onClick?: (title: string) => void }> = ({
+  id,
+  onClick,
+  ...rest
+}) => {
   const account = accountModel.usePopulatedAccounts()[id]
-  return <span {...rest}>{account.title}</span>
+  return (
+    <span {...rest}>
+      <Clickable onClick={onClick ? () => onClick(account.title) : undefined}>
+        {account.title}
+      </Clickable>
+    </span>
+  )
+}
+
+/** Makes text clickable without triggering the transaction itself */
+const Clickable: FC<{
+  onClick?: () => void
+  children: React.ReactNode
+}> = ({ onClick, children }) => {
+  if (!onClick) return <span>{children}</span>
+  return (
+    <PayeeWrapper
+      onClick={e => {
+        e.preventDefault()
+        e.stopPropagation()
+        onClick()
+      }}
+    >
+      {children}
+    </PayeeWrapper>
+  )
 }
 
 const Payee: FC<{
@@ -279,14 +341,14 @@ const Payee: FC<{
 }> = ({ payee, merchant, onClick, ...rest }) => {
   const merchants = merchantModel.useMerchants()
   if (!payee && !merchant) return null
-  let name = merchant ? merchants[merchant]?.title : payee
+  let name = (merchant ? merchants[merchant]?.title : payee) || payee
   return (
     <PayeeWrapper
       onClick={e => {
-        if (onClick) {
+        if (onClick && name) {
           e.preventDefault()
           e.stopPropagation()
-          onClick(payee || '')
+          onClick(name)
         }
       }}
       {...rest}
@@ -356,6 +418,11 @@ const AmountsWrapper = styled.div<{
     content: '${p => (p.type === 'transfer' ? '→' : '')}';
     margin: 0 4px;
   }
+`
+
+const DateLabel = styled.span`
+  color: ${p => p.theme.palette.text.disabled};
+  white-space: nowrap;
 `
 
 const InfoWrapper = styled.div`

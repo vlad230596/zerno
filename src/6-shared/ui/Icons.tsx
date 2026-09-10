@@ -338,3 +338,38 @@ export const TagIcon = createFeatherIcon(
   </>,
   'tag'
 )
+
+export const SearchIcon = createFeatherIcon(
+  <>
+    <circle cx="11" cy="11" r="8"></circle>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </>,
+  'search'
+)
+
+export const StoreIcon = createFeatherIcon(
+  <>
+    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+    <line x1="3" y1="6" x2="21" y2="6"></line>
+    <path d="M16 10a4 4 0 0 1-8 0"></path>
+  </>,
+  'shopping-bag'
+)
+
+export const HashIcon = createFeatherIcon(
+  <>
+    <line x1="4" y1="9" x2="20" y2="9"></line>
+    <line x1="4" y1="15" x2="20" y2="15"></line>
+    <line x1="10" y1="3" x2="8" y2="21"></line>
+    <line x1="16" y1="3" x2="14" y2="21"></line>
+  </>,
+  'hash'
+)
+
+export const CopyIcon = createFeatherIcon(
+  <>
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+  </>,
+  'copy'
+)

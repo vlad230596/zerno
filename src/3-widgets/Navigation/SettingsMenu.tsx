@@ -7,7 +7,6 @@ import {
   WhatshotIcon,
   WbSunnyIcon,
   NightsStayIcon,
-  FavoriteBorderIcon,
   HelpOutlineIcon,
   SyncIcon,
   SyncDisabledIcon,
@@ -206,6 +205,12 @@ function NavItems({ onClose }: ItemProps) {
         </ListItemIcon>
         <ListItemText>{t('accounts')}</ListItemText>
       </MenuItem>
+      <MenuItem onClick={handleNav('/rules')} component={Link} to="/rules">
+        <ListItemIcon>
+          <AutoAwesomeIcon />
+        </ListItemIcon>
+        <ListItemText>{t('rules')}</ListItemText>
+      </MenuItem>
       <MenuItem onClick={handleNav('/review')} component={Link} to="/review">
         <ListItemIcon>
           <WhatshotIcon />
@@ -217,16 +222,6 @@ function NavItems({ onClose }: ItemProps) {
           <HelpOutlineIcon />
         </ListItemIcon>
         <ListItemText>{t('about')}</ListItemText>
-      </MenuItem>
-      <MenuItem
-        onClick={handleNav('/donation')}
-        component={Link}
-        to="/donation"
-      >
-        <ListItemIcon>
-          <FavoriteBorderIcon />
-        </ListItemIcon>
-        <ListItemText>{t('donate')}</ListItemText>
       </MenuItem>
       <Divider sx={{ opacity: '0.6' }} />
     </>

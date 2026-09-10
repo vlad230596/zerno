@@ -1,41 +1,47 @@
-# [Zerro](https://zerro.app/)
+# Zerno
 
-**Unofficial ZenMoney client with envelope budgeting superpowers**
+**Личный клиент [ZenMoney](https://zenmoney.app/) с конвертным бюджетированием**
 
-Zerro syncs with your ZenMoney account and lets you plan every koruna, euro or dollar using YNAB-style envelope budgets, savings goals and clear analytics.
+Zerno синхронизируется с аккаунтом ZenMoney и позволяет планировать деньги по
+конвертам в стиле YNAB: цели накоплений, аналитика, правила категоризации и
+детальная история трат. Работает офлайн как PWA.
 
-[Channel with updates](https://t.me/zerroapp) | [User chat](https://t.me/zerrochat)
+> Форк [Zerro](https://github.com/ardov/zerro) © [ardov](https://github.com/ardov),
+> GPL-2.0. Точка ответвления — `be47283a`.
+> Список расхождений с оригиналом — в [docs/fork-changes.md](./docs/fork-changes.md).
 
-## Main features
+## Возможности
 
-- 💰 **Envelope budgets** across multiple currencies
-- 🎯 **Savings goals** for big purchases or rainy‑day funds
-- 💹 **Basic analytics** of income, expenses and net worth
-- ⚡️ **Bulk actions**: merge, change categories, delete, and restore deleted operations
-- 💾 **Full backup** of all data (no restoration yet)
-- 📱 **Mobile-friendly** progressive web app (PWA) and works even offline
+- 💰 **Конверты** по нескольким валютам
+- 🎯 **Цели накоплений** на крупные покупки и подушку
+- 💹 **Аналитика** доходов, расходов и капитала
+- 🔍 **Поиск операций** на языке запросов: категории, магазины, суммы, даты, типы
+- ✨ **Правила категоризации** — размечают историю и новые операции автоматически
+- ⚡️ **Массовые действия**: слияние, смена категорий, удаление и восстановление
+- 💾 **Полный бэкап** данных
+- 📱 **PWA**, работает офлайн
 
-## Links
+## Документация
 
-- [Zerro](https://zerro.app/) / [updates](https://t.me/zerroapp) / [chat](https://t.me/zerrochat)
-- [ZenMoney](https://zenmoney.app/) + [API documentation](https://github.com/zenmoney/ZenPlugins/wiki/ZenMoney-API)
-- [YNAB](https://www.youneedabudget.com/) — they are good at explaining the concept of envelope budgeting
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — стек, слои FSD, устройство данных и синхронизации
+- [docs/fork-changes.md](./docs/fork-changes.md) — что изменено относительно Zerro
+- [docs/features/](./docs/features) — проработка отдельных фич
 
-## Contributing
+## Ссылки
 
-If you want to contribute, let's discuss the idea first here in issues or in [chat](https://t.me/zerrochat)/[dm](https://t.me/ardov). I'm open to suggestions and ideas but I don't want to waste your time on things that don't fit the product 🖤
+- [ZenMoney](https://zenmoney.app/) + [документация API](https://github.com/zenmoney/ZenPlugins/wiki/ZenMoney-API)
+- [Zerro](https://github.com/ardov/zerro) — оригинальный проект
+- [YNAB](https://www.youneedabudget.com/) — про сам метод конвертного бюджетирования
 
-### Run locally
+## Запуск локально
 
-1. Install [pnpm](https://pnpm.io/) and [Node.js](https://nodejs.org/)
-2. Clone the repository
-3. `pnpm install` to install dependencies
-4. `pnpm run dev` to run the development server on [http://localhost:3000](http://localhost:3000/)
-5. You are great
+1. Поставить [pnpm](https://pnpm.io/) и [Node.js](https://nodejs.org/)
+2. `pnpm install`
+3. `pnpm run dev` — дев-сервер на [http://localhost:3000](http://localhost:3000/)
 
-### Run locally in docker
+Порт именно 3000: `REDIRECT_URI` в `.env.development` зарегистрирован на него,
+на другом порту OAuth ZenMoney не пройдёт.
 
-```bash
-docker build -t zerro:dev .
-docker run -it -d --rm -v ${PWD}:/app -v /app/node_modules -p 3000:3000 -e CHOKIDAR_USEPOLLING=true zerro:dev
-```
+## Лицензия
+
+[GPL-2.0](./LICENSE), как и у оригинала.

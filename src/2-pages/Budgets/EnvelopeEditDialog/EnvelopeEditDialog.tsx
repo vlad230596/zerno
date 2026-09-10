@@ -1,4 +1,4 @@
-import React, { FC } from 'react'
+import React, { FC, useMemo } from 'react'
 import { shallowEqual } from 'react-redux'
 import { v1 as uuidv1 } from 'uuid'
 import { useFormik } from 'formik'
@@ -27,6 +27,7 @@ import {
 // import { TagSelect } from '@components/TagSelect'
 import { CurrencyCodeSelect } from './CurrencyCodeSelect'
 import { VisibilitySelect } from './VisidilitySelect'
+import { tagModel } from '5-entities/tag'
 import { userModel } from '5-entities/user'
 import { registerPopover } from '6-shared/historyPopovers'
 import { useTranslation } from 'react-i18next'
@@ -49,6 +50,10 @@ export const EnvelopeEditDialog: FC = () => {
   const isNew = !envelope?.id
   const id = envelope?.id || envelopeModel.makeId(EnvType.Tag, uuidv1())
   const defaultCurrency = userModel.useUserCurrency()
+  const populatedTags = tagModel.usePopulatedTags()
+  const currentTagId = envelope?.id
+    ? envelopeModel.parseId(envelope.id).id
+    : null
   const {
     values,
     initialValues,
@@ -87,6 +92,23 @@ export const EnvelopeEditDialog: FC = () => {
     enableReinitialize: true,
   })
 
+  /**
+   * Creating an envelope creates a ZenMoney category, and renaming one renames
+   * it. Nothing stops two categories from sharing a name, and once they do
+   * they are indistinguishable in every picker — the only way to tell them
+   * apart is by id. So say it out loud before it happens.
+   */
+  const nameTaken = useMemo(() => {
+    const name = normalizeName(values.originalName)
+    if (!name) return false
+    return Object.values(populatedTags).some(
+      tag =>
+        tag.id !== 'null' &&
+        tag.id !== currentTagId &&
+        normalizeName(tag.name) === name
+    )
+  }, [values.originalName, populatedTags, currentTagId])
+
   return (
     <Dialog
       {...displayProps}
@@ -109,7 +131,14 @@ export const EnvelopeEditDialog: FC = () => {
           <TextField
             label={t('nameLabel')}
             error={!!errors.originalName}
-            helperText={errors.originalName}
+            helperText={
+              errors.originalName || (nameTaken ? t('nameTaken') : '')
+            }
+            sx={
+              nameTaken && !errors.originalName
+                ? { '& .MuiFormHelperText-root': { color: 'warning.main' } }
+                : undefined
+            }
             autoFocus
             name="originalName"
             value={values.originalName}
@@ -240,3 +269,6 @@ const Color: FC<ColorProps> = ({ value, onChange }) => {
     </>
   )
 }
+
+const normalizeName = (name: string) =>
+  name.trim().toLowerCase().replace(/ё/g, 'е')

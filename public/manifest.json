@@ -1,10 +1,10 @@
 {
-  "short_name": "Zerro",
-  "name": "Zerro",
+  "short_name": "Zerno",
+  "name": "Zerno",
   "start_url": "/?source=pwa",
   "display": "standalone",
-  "theme_color": "#00090F",
-  "background_color": "#00090F",
+  "theme_color": "#241D14",
+  "background_color": "#241D14",
   "icons": [
     {
       "src": "icons/192px.png",

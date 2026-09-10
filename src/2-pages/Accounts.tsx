@@ -10,9 +10,8 @@ export default function Accounts() {
   return (
     <>
       <Helmet>
-        <title>{t('pageTitle')} | Zerro</title>
+        <title>{t('pageTitle')} | Zerno</title>
         <meta name="description" content={t('pageDescription')} />
-        <link rel="canonical" href="https://zerro.app/accounts" />
       </Helmet>
       <Box sx={{ p: 2, pb: 8, mx: 'auto', maxWidth: 320 }}>
         <AccountList />

@@ -17,11 +17,16 @@ import { Tooltip } from '6-shared/ui/Tooltip'
 import {
   DeleteIcon,
   CloseIcon,
+  CopyIcon,
   RestoreFromTrashIcon,
   CalendarIcon,
+  AutoAwesomeIcon,
 } from '6-shared/ui/Icons'
+import { useSnackbar } from '6-shared/ui/SnackbarProvider'
+import { useToggle } from '6-shared/hooks/useToggle'
 import { AmountInput } from '6-shared/ui/AmountInput'
 import { rateToWords } from '6-shared/helpers/money'
+import { copyToClipboard } from '6-shared/helpers/copyToClipboard'
 import { formatDate, parseDate, toISODate } from '6-shared/helpers/date'
 
 import { useAppDispatch } from 'store'
@@ -30,6 +35,7 @@ import { trModel } from '5-entities/transaction'
 import { accountModel } from '5-entities/account'
 import { instrumentModel } from '5-entities/currency/instrument'
 import { TagList } from '5-entities/tag/ui/TagList'
+import { RuleModal } from '4-features/transactionRules'
 
 import { Reciept } from './Reciept'
 import { Map } from './Map'
@@ -100,6 +106,7 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
     payee,
     latitude,
     longitude,
+    mcc,
   } = tr
 
   const [localComment, setLocalComment] = useState(tr.comment)
@@ -109,6 +116,9 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
   const [localDate, setLocalDate] = useState(tr.date)
   const [localTime, setLocalTime] = useState(formatDate(tr.created, 'HH:mm'))
   const [localTag, setLocalTag] = useState(tr.tag)
+  const [isRuleOpen, toggleRuleOpen] = useToggle()
+  // Categories only make sense for income and outcome, and so do rules.
+  const canHaveRule = trType === 'income' || trType === 'outcome'
 
   useEffect(() => {
     setLocalComment(tr.comment)
@@ -188,6 +198,7 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
         onDeletePermanently={onDeletePermanently}
         onRestore={onRestore}
         deleted={deleted}
+        onCreateRule={canHaveRule ? toggleRuleOpen : undefined}
       />
       {(trType === 'income' || trType === 'outcome') && (
         <TagList
@@ -292,6 +303,8 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
             })}
           </span>
           <RateToWords tr={tr} />
+          {mcc !== null && <span>{t('mcc', { code: mcc })}</span>}
+          <TransactionId id={id} />
         </Stack>
 
         {!!onSelectSimilar && (
@@ -301,6 +314,50 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
         )}
       </Stack>
       <SaveButton visible={hasChanges} onSave={onSave} />
+      {canHaveRule && (
+        <RuleModal
+          key={id + isRuleOpen}
+          open={isRuleOpen}
+          onClose={toggleRuleOpen}
+          seedTransaction={tr}
+          seedTags={localTag || []}
+        />
+      )}
+    </Box>
+  )
+}
+
+/**
+ * Internal ZenMoney id of the transaction.
+ * Amounts repeat, ids don't — so this is the way to point at an exact
+ * operation. Copy it and paste into the search to find it again.
+ */
+const TransactionId: FC<{ id: TTransactionId }> = ({ id }) => {
+  const { t } = useTranslation('transaction')
+  const setSnackbar = useSnackbar()
+  const copy = async () => {
+    const copied = await copyToClipboard(id)
+    if (copied) setSnackbar({ message: t('idCopied'), autoHideDuration: 2000 })
+  }
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+      <Box
+        component="span"
+        sx={{
+          fontFamily: 'monospace',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          userSelect: 'all',
+        }}
+      >
+        {t('trId', { id })}
+      </Box>
+      <Tooltip title={t('btnCopyId')}>
+        <IconButton size="small" onClick={copy} sx={{ color: 'inherit' }}>
+          <CopyIcon sx={{ fontSize: 14 }} />
+        </IconButton>
+      </Tooltip>
     </Box>
   )
 }
@@ -312,9 +369,17 @@ const Head: FC<{
   onDelete: () => void
   onDeletePermanently: () => void
   onRestore: () => void
+  onCreateRule?: () => void
 }> = props => {
-  const { title, deleted, onClose, onDelete, onDeletePermanently, onRestore } =
-    props
+  const {
+    title,
+    deleted,
+    onClose,
+    onDelete,
+    onDeletePermanently,
+    onRestore,
+    onCreateRule,
+  } = props
   const { t } = useTranslation('transaction')
   return (
     <Box
@@ -339,6 +404,11 @@ const Head: FC<{
           {title}
         </Typography>
       </Box>
+      {!!onCreateRule && !deleted && (
+        <Tooltip title={t('btnCreateRule')}>
+          <IconButton onClick={onCreateRule} children={<AutoAwesomeIcon />} />
+        </Tooltip>
+      )}
       {deleted ? (
         <Tooltip title={t('btnRestore')}>
           <IconButton onClick={onRestore} children={<RestoreFromTrashIcon />} />

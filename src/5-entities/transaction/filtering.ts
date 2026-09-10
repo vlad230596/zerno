@@ -18,6 +18,10 @@ type BasicConditions = {
 
 type AdditionalConditions = {
   search?: null | string
+  /** Case-insensitive substring search in payee */
+  payeeText?: null | string
+  /** Case-insensitive substring search in comment */
+  commentText?: null | string
   type?: StringCondition<TrType>
   showDeleted?: boolean
   isViewed?: boolean
@@ -43,14 +47,22 @@ export const checkRaw =
   (tr: TTransaction): boolean =>
     checkConditions(tr, conditions)
 
-function checkConditions(tr: TTransaction, conditions?: TrCondition): boolean {
+function checkConditions(
+  tr: TTransaction,
+  conditions?: TrCondition,
+  /** `showDeleted` from the parent condition. Nested conditions inherit it */
+  inheritedShowDeleted?: boolean
+): boolean {
+  const showDeleted = conditions?.showDeleted ?? inheritedShowDeleted
   // Check if transaction is deleted even if it's not specified in conditions
   // (usually we don't want deleted transactions)
-  if (!checkDeleted(tr, conditions?.showDeleted)) return false
+  if (!checkDeleted(tr, showDeleted)) return false
   // No conditions - return true
   if (!conditions) return true
   // Now check all other conditions
-  return keys(conditions).every(key => checkKey(key, tr, conditions))
+  return keys(conditions).every(key =>
+    checkKey(key, tr, conditions, showDeleted)
+  )
 }
 
 /**
@@ -62,7 +74,8 @@ function checkConditions(tr: TTransaction, conditions?: TrCondition): boolean {
 function checkKey(
   key: keyof TrCondition,
   tr: TTransaction,
-  conditions?: TrCondition
+  conditions?: TrCondition,
+  showDeleted?: boolean
 ): boolean {
   if (!conditions || conditions[key] === undefined) return true
 
@@ -70,6 +83,10 @@ function checkKey(
     /* Handle custom conditions */
     case 'search':
       return checkSearch(tr, conditions[key])
+    case 'payeeText':
+      return checkTextField(tr.payee, conditions[key])
+    case 'commentText':
+      return checkTextField(tr.comment, conditions[key])
     case 'type':
       return checkType(tr, conditions[key])
     case 'showDeleted':
@@ -90,12 +107,15 @@ function checkKey(
     /* Handle logical operators */
     case 'or':
       return (
-        conditions.or?.some(condition => checkConditions(tr, condition)) ?? true
+        conditions.or?.some(condition =>
+          checkConditions(tr, condition, showDeleted)
+        ) ?? true
       )
     case 'and':
       return (
-        conditions.and?.every(condition => checkConditions(tr, condition)) ??
-        true
+        conditions.and?.every(condition =>
+          checkConditions(tr, condition, showDeleted)
+        ) ?? true
       )
 
     /* Handle basic conditions */
@@ -117,6 +137,11 @@ function checkSearch(tr: TTransaction, condition?: TrCondition['search']) {
       tr.comment?.toUpperCase().includes(upperCondition) ||
       tr.payee?.toUpperCase().includes(upperCondition)
   )
+}
+
+function checkTextField(value: string | null, condition?: null | string) {
+  if (!condition) return true
+  return Boolean(value?.toUpperCase().includes(condition.toUpperCase()))
 }
 
 function checkType(tr: TTransaction, condition?: TrCondition['type']) {

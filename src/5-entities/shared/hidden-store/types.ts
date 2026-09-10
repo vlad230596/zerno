@@ -7,4 +7,6 @@ export enum HiddenDataType {
   EnvelopeMeta = 'EnvelopeMeta',
   UserSettings = 'UserSettings',
   TagOrder = 'tagOrder',
+  Rules = 'rules',
+  RuleState = 'ruleState',
 }

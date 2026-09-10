@@ -71,10 +71,9 @@ function Budgets() {
     <>
       <Helmet>
         <title>
-          {t('pageTitle', { month: formatDate(month, 'LLLL yyyy') })} | Zerro
+          {t('pageTitle', { month: formatDate(month, 'LLLL yyyy') })} | Zerno
         </title>
         <meta name="description" content="" />
-        <link rel="canonical" href="https://zerro.app/budget" />
       </Helmet>
 
       <DnDContext>

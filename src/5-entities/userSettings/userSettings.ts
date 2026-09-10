@@ -15,6 +15,12 @@ export type TUserSettings = {
 
   /** Use SVG icons instead of emoji for tags/categories */
   emojiIcons: boolean
+
+  /**
+   * Hide transfers between own accounts in the transaction search.
+   * They are not real spending and only distort the totals.
+   */
+  ignoreTransfers: boolean
 }
 export type TUserSettingsPatch = Partial<TUserSettings>
 export type TStoredUserSettings = Partial<TUserSettings>
@@ -30,6 +36,7 @@ export const getUserSettings: TSelector<TUserSettings> = createSelector(
     sawMigrationAlert: raw.sawMigrationAlert ?? false,
     preferZmBudgets: raw.preferZmBudgets ?? false,
     emojiIcons: raw.emojiIcons ?? false,
+    ignoreTransfers: raw.ignoreTransfers ?? true,
   })
 )
 

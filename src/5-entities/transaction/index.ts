@@ -34,6 +34,7 @@ export const trModel = {
 
   // New ID-based selectors
   getTransactionIds,
+  getTrTypeGetter,
   // getTransaction,
 
   // Existing hooks (for backward compatibility)

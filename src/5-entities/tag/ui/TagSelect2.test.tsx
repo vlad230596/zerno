@@ -9,9 +9,29 @@ import dataReducer from 'store/data'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { TagSelect2 } from './TagSelect2'
 
-vi.mock('i18next', () => ({
-  t: (key: string) => key,
-}))
+// `t` returns the key, so assertions don't depend on translations. The default
+// export is needed too: importing the component pulls in `6-shared/localization`,
+// which sets i18next up as a side effect of being imported.
+vi.mock('i18next', () => {
+  type I18nStub = {
+    t: (key: string) => string
+    init: () => Promise<void>
+    on: () => void
+    language: string
+    resolvedLanguage: string
+    use: () => I18nStub
+  }
+  const t = (key: string) => key
+  const instance: I18nStub = {
+    t,
+    init: () => Promise.resolve(),
+    on: () => {},
+    language: 'en',
+    resolvedLanguage: 'en',
+    use: () => instance,
+  }
+  return { default: instance, t }
+})
 
 function makeOutcomeTag(id: string, title: string): TTag {
   return {

@@ -15,10 +15,25 @@ import { sendEvent } from '6-shared/helpers/tracking'
 import { useDebounce } from '6-shared/hooks/useDebounce'
 import { accountModel } from '5-entities/account'
 import { trModel } from '5-entities/transaction'
+import { userSettingsModel } from '5-entities/userSettings'
+import {
+  makeChunk,
+  parseQuery,
+  toggleChunk,
+  useTrSearch,
+} from '4-features/transactionSearch'
 import { getEventPosition } from '3-widgets/global/shared/helpers'
 
 import { GrouppedList } from './GrouppedList'
-import Filter from './TopBar/Filter'
+import { FlatList } from './FlatList'
+import {
+  DEFAULT_SORT,
+  TrSortMode,
+  isAmountSort,
+  useSortedTransactions,
+} from './sorting'
+import { SearchBar } from './TopBar/SearchBar'
+import { TrStats } from './TrStats'
 import Actions from './TopBar/Actions'
 import { Transaction } from './Transaction'
 import { useTrContextMenu } from '3-widgets/global/TrContextMenu'
@@ -48,37 +63,44 @@ export const TransactionList: FC<TTransactionListProps> = props => {
   } = props
 
   const dispatch = useAppDispatch()
-  const [filter, setFilter] = useState<TrCondition | undefined>(undefined)
-  const setCondition = useCallback(
-    (condition?: TrCondition) =>
-      setFilter(filter => {
-        return { ...filter, ...condition }
-      }),
-    []
-  )
-  const handleClearFilter = useCallback(() => {
-    setFilter(undefined)
-  }, [])
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<TrSortMode>(DEFAULT_SORT)
 
-  const onFilterByPayee = useCallback(
-    (payee?: string) => setFilter({ search: payee }),
-    []
-  )
+  // Transfers between own accounts are not spending, so by default they are
+  // out of the search. Only for the search view: drawers show what they asked
+  const { ignoreTransfers } = userSettingsModel.useUserSettings()
+  const skipTransfers = ignoreTransfers && !hideFilter
+  const toggleIgnoreTransfers = useCallback(() => {
+    dispatch(userSettingsModel.patch({ ignoreTransfers: !ignoreTransfers }))
+  }, [dispatch, ignoreTransfers])
+
+  // Chips react to every keystroke, filtering waits a bit
+  const tokens = useMemo(() => parseQuery(query), [query])
+  const debouncedQuery = useDebounce(query, 300)
+  const { condition } = useTrSearch(debouncedQuery, {
+    ignoreTransfers: skipTransfers,
+  })
+
+  /** Replaces the whole query. Used when a payee or a category is clicked */
+  const searchFor = useCallback((chunk: string) => {
+    sendEvent('Transaction: search by chip')
+    setQuery(chunk)
+  }, [])
 
   const resultFilter = useMemo(() => {
     if (preFilter) {
-      return filter ? ({ and: [preFilter, filter] } as TrCondition) : preFilter
+      return condition
+        ? ({ and: [preFilter, condition] } as TrCondition)
+        : preFilter
     }
-    return filter
-  }, [filter, preFilter])
-
-  const debouncedFilter = useDebounce(resultFilter, 300)
+    return condition
+  }, [condition, preFilter])
 
   const transactions = useMemo(
     () => transactionObjects?.map(tr => tr.id),
     [transactionObjects]
   )
-  const trList = useFilteredTransactions(transactions, debouncedFilter)
+  const trList = useFilteredTransactions(transactions, resultFilter)
 
   const debtId = accountModel.useDebtAccountId()
 
@@ -123,43 +145,74 @@ export const TransactionList: FC<TTransactionListProps> = props => {
     if (checkedDate) onSelectSimilar(checkedDate)
   }, [onSelectSimilar, checkedDate])
 
-  const groups = useMemo(() => {
-    let groups: ByDate<{ date: TISODate; transactions: JSX.Element[] }> = {}
-    trList.forEach(tr => {
-      let Component = (
-        <Transaction
-          key={tr.id}
-          id={tr.id}
-          isOpened={tr.id === opened}
-          isChecked={checked.includes(tr.id)}
-          isInSelectionMode={!!checked.length}
-          onOpen={onTrOpen}
-          onToggle={toggleTransaction}
-          onPayeeClick={onFilterByPayee}
-          onContextMenu={(e, id) =>
-            openContextMenu(
-              { id, onSelectSimilar, onMarkOlderViewed },
-              getEventPosition(e)
-            )
-          }
-        />
-      )
-      groups[tr.date] ??= { date: tr.date, transactions: [] }
-      groups[tr.date].transactions.push(Component)
-    })
-    return Object.values(groups)
+  const onFilterByPayee = useCallback(
+    (payee?: string) => {
+      if (!payee) return
+      searchFor(makeChunk('@', payee))
+    },
+    [searchFor]
+  )
+  const onFilterByTag = useCallback(
+    (name: string) => searchFor(makeChunk('#', name)),
+    [searchFor]
+  )
+  const onFilterByAccount = useCallback(
+    (title: string) => searchFor(makeChunk('$', title)),
+    [searchFor]
+  )
+
+  const sortedList = useSortedTransactions(trList, sort)
+  const isFlat = isAmountSort(sort)
+
+  const elements = useMemo(() => {
+    return sortedList.map(tr => (
+      <Transaction
+        key={tr.id}
+        id={tr.id}
+        isOpened={tr.id === opened}
+        isChecked={checked.includes(tr.id)}
+        isInSelectionMode={!!checked.length}
+        // Without date headers the date has to be in the row itself
+        showDate={isFlat}
+        onOpen={onTrOpen}
+        onToggle={toggleTransaction}
+        onPayeeClick={hideFilter ? undefined : onFilterByPayee}
+        onTagClick={hideFilter ? undefined : onFilterByTag}
+        onAccountClick={hideFilter ? undefined : onFilterByAccount}
+        onContextMenu={(e, id) =>
+          openContextMenu(
+            { id, onSelectSimilar, onMarkOlderViewed },
+            getEventPosition(e)
+          )
+        }
+      />
+    ))
   }, [
-    trList,
+    sortedList,
     debtId,
     opened,
     checked,
+    isFlat,
+    hideFilter,
     onTrOpen,
     toggleTransaction,
     onFilterByPayee,
+    onFilterByTag,
+    onFilterByAccount,
     openContextMenu,
     onSelectSimilar,
     onMarkOlderViewed,
   ])
+
+  const groups = useMemo(() => {
+    if (isFlat) return []
+    let groups: ByDate<{ date: TISODate; transactions: JSX.Element[] }> = {}
+    sortedList.forEach((tr, i) => {
+      groups[tr.date] ??= { date: tr.date, transactions: [] }
+      groups[tr.date].transactions.push(elements[i])
+    })
+    return Object.values(groups)
+  }, [isFlat, sortedList, elements])
 
   return (
     <>
@@ -185,10 +238,18 @@ export const TransactionList: FC<TTransactionListProps> = props => {
               mx: 'auto',
             }}
           >
-            <Filter
-              conditions={filter}
-              setCondition={setCondition}
-              clearFilter={handleClearFilter}
+            <SearchBar
+              query={query}
+              tokens={tokens}
+              onChange={setQuery}
+              ignoreTransfers={ignoreTransfers}
+              onToggleIgnoreTransfers={toggleIgnoreTransfers}
+              sort={sort}
+              onSortChange={setSort}
+            />
+            <TrStats
+              transactions={trList}
+              onPeriodClick={chunk => setQuery(q => toggleChunk(q, chunk))}
             />
           </Box>
         )}
@@ -200,11 +261,11 @@ export const TransactionList: FC<TTransactionListProps> = props => {
           onCheckAll={checkAll}
         />
 
-        <Box sx={{ flex: '1 1 auto' }}>
-          {groups.length ? (
+        <Box sx={{ flex: '1 1 auto', minHeight: 120 }}>
+          {!elements.length && <EmptyState />}
+          {!!elements.length && isFlat && <FlatList transactions={elements} />}
+          {!!elements.length && !isFlat && (
             <GrouppedList {...{ groups, initialDate }} />
-          ) : (
-            <EmptyState />
           )}
         </Box>
       </Box>

@@ -13,9 +13,8 @@ export default function Token() {
   return (
     <>
       <Helmet>
-        <title>{t('pageTitle')} | Zerro</title>
+        <title>{t('pageTitle')} | Zerno</title>
         <meta name="description" content={t('pageDescription')} />
-        <link rel="canonical" href="https://zerro.app/token" />
       </Helmet>
       <Box
         sx={{

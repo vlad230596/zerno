@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "zerro-dev",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "zerro-dev-alt",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "exec", "vite", "--port", "3011"],
+      "port": 3011
+    }
+  ]
+}

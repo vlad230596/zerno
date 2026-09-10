@@ -12,10 +12,14 @@ export type TTransactionProps = {
   isChecked: boolean
   isOpened: boolean
   isInSelectionMode: boolean
+  /** Shows the date in the row. Needed when there are no date headers */
+  showDate?: boolean
   // Actions
   onOpen?: (id: TTransactionId) => void
   onToggle?: (id: TTransactionId) => void
   onPayeeClick?: (payee: string) => void
+  onTagClick?: (tagName: string) => void
+  onAccountClick?: (accountTitle: string) => void
   onContextMenu?: (
     event: React.MouseEvent | React.TouchEvent,
     id: TTransactionId
@@ -28,9 +32,12 @@ export const Transaction: FC<TTransactionProps> = props => {
     isChecked,
     isOpened,
     isInSelectionMode,
+    showDate,
     onOpen,
     onToggle,
     onPayeeClick: onFilterByPayee,
+    onTagClick,
+    onAccountClick,
     onContextMenu,
   } = props
 
@@ -53,12 +60,12 @@ export const Transaction: FC<TTransactionProps> = props => {
       <Symbol {...{ tr, trType, isChecked, isInSelectionMode, onToggle }} />
       <Content>
         <Row color="textPrimary">
-          <Tags {...{ tr, trType }} />
+          <Tags {...{ tr, trType, onTagClick }} />
           <Amounts {...{ tr, trType }} />
         </Row>
         <SecondaryRow color="text.secondary">
-          <Info {...{ tr, trType, onFilterByPayee }} />
-          <Accounts {...{ tr, trType, onFilterByPayee }} />
+          <Info {...{ tr, trType, showDate, onFilterByPayee }} />
+          <Accounts {...{ tr, trType, onFilterByPayee, onAccountClick }} />
         </SecondaryRow>
       </Content>
     </Wrapper>
