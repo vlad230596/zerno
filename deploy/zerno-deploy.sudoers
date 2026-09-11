@@ -1,0 +1,2 @@
+zerno-deploy ALL=(root) NOPASSWD: /usr/local/sbin/zerno-deploy *
+zerno-deploy ALL=(root) NOPASSWD: /usr/local/sbin/zerno-dev-deploy *

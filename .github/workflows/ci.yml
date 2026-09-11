@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to verify
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to verify
+        required: false
+        type: string
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # pnpm comes from the `packageManager` field, so the version is pinned by
+      # the repository rather than by a floating action.
+      - name: Activate pnpm
+        run: |
+          node --version
+          corepack enable
+          corepack prepare --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Unit tests
+        run: pnpm exec vitest run
+
+      # A smoke build with placeholder credentials: it proves the bundle builds,
+      # and never produces an artefact anyone could sign in through.
+      - name: Build
+        env:
+          APP_VERSION: ci-${{ github.sha }}
+          REACT_APP_REDIRECT_URI: https://example.invalid
+          REACT_APP_CLIENT_ID: ci-placeholder
+          REACT_APP_CLIENT_SECRET: ci-placeholder
+        run: pnpm exec vite build
+
+  required:
+    name: Required checks
+    needs: [quality]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every check succeeded
+        run: |
+          if [[ '${{ needs.quality.result }}' != 'success' ]]; then
+            echo 'Quality checks did not succeed.' >&2
+            exit 1
+          fi

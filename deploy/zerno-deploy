@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Root-owned production deployment. Installed at /usr/local/sbin/zerno-deploy
+# and reachable only through the restricted sudo rule in zerno-deploy.sudoers.
+# Deliberately separate from zerno-dev-deploy: a development deployment must not
+# be able to touch production even if its credentials leak.
+set -Eeuo pipefail
+
+umask 077
+
+readonly APP_DIR='/opt/zerno'
+readonly COMPOSE_FILE='compose.prod.yaml'
+readonly RELEASE_ENV='.release.env'
+readonly PROJECT='zerno'
+
+if [[ $# -ne 3 ]]; then
+  echo 'Usage: zerno-deploy VERSION WEB_IMAGE GHCR_USER' >&2
+  exit 64
+fi
+
+readonly VERSION="$1"
+readonly WEB_IMAGE="$2"
+readonly GHCR_USER="$3"
+
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo 'Version must be a SemVer core such as 1.0.0.' >&2
+  exit 64
+fi
+if [[ ! "$GHCR_USER" =~ ^[A-Za-z0-9-]+$ ]]; then
+  echo 'Invalid GHCR username.' >&2
+  exit 64
+fi
+
+IFS= read -r GHCR_TOKEN
+if [[ -z "$GHCR_TOKEN" ]]; then
+  echo 'GHCR token is required on stdin.' >&2
+  exit 64
+fi
+
+exec 9>/run/lock/zerno-deploy.lock
+if ! flock -n 9; then
+  echo 'Another Zerno deployment is already running.' >&2
+  exit 75
+fi
+
+cd "$APP_DIR"
+test -f .env
+test -f "$COMPOSE_FILE"
+
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
+: "${APP_ORIGIN:?APP_ORIGIN must be set in /opt/zerno/.env}"
+: "${IMAGE_OWNER:?IMAGE_OWNER must be set in /opt/zerno/.env}"
+
+# The owner is pinned, not a wildcard: a wildcard would let anyone who can
+# invoke this script make root pull and run an image named zerno-web from any
+# GHCR namespace.
+if [[ ! "$IMAGE_OWNER" =~ ^[A-Za-z0-9-]+$ ]]; then
+  echo 'IMAGE_OWNER must be set in .env to the GHCR namespace that owns the image.' >&2
+  exit 78
+fi
+if [[ ! "$WEB_IMAGE" =~ ^ghcr\.io/${IMAGE_OWNER}/zerno-web@sha256:[a-f0-9]{64}$ ]]; then
+  echo "Image must be a digest reference under ghcr.io/$IMAGE_OWNER." >&2
+  exit 64
+fi
+
+cleanup() {
+  GHCR_TOKEN=''
+  docker logout ghcr.io >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+printf '%s\n' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USER" --password-stdin >/dev/null
+docker pull "$WEB_IMAGE"
+
+readonly IMAGE_VERSION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$WEB_IMAGE")"
+readonly BUILD_DATE="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.created" }}' "$WEB_IMAGE")"
+if [[ "$IMAGE_VERSION" != "$VERSION" ]]; then
+  echo "Image version label $IMAGE_VERSION does not match requested $VERSION." >&2
+  exit 65
+fi
+
+# Keep the previous reference so a rollback is a one-line edit plus a restart.
+if [[ -f "$RELEASE_ENV" ]]; then
+  cp "$RELEASE_ENV" "${RELEASE_ENV}.previous"
+fi
+cat >"${RELEASE_ENV}.next" <<EOF
+APP_VERSION=$VERSION
+BUILD_DATE=$BUILD_DATE
+WEB_IMAGE=$WEB_IMAGE
+EOF
+mv "${RELEASE_ENV}.next" "$RELEASE_ENV"
+
+compose=(docker compose -p "$PROJECT" --env-file .env --env-file "$RELEASE_ENV" -f "$COMPOSE_FILE")
+"${compose[@]}" up -d --no-build --wait --wait-timeout 120
+
+# Verify through the public origin, so the check covers Caddy and TLS too and
+# not merely the container.
+readonly VERSION_JSON="$(curl --fail --silent --show-error "$APP_ORIGIN/version.json")"
+if [[ "$VERSION_JSON" != *"\"version\":\"$VERSION\""* ]]; then
+  echo "Published version does not match $VERSION: $VERSION_JSON" >&2
+  exit 70
+fi
+readonly INDEX_HTML="$(curl --fail --silent --show-error "$APP_ORIGIN/")"
+if [[ "$INDEX_HTML" != *'<title>Zerno'* ]]; then
+  echo 'Production did not return the Zerno application shell.' >&2
+  exit 70
+fi
+
+echo "Zerno $VERSION deployed successfully."

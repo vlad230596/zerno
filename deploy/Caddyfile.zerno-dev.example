@@ -1,0 +1,29 @@
+# Development stand: same hostname as production, different port.
+# The certificate needs no extra work — same hostname as production, and Caddy
+# obtains it over HTTP-01 on port 80.
+zerno.example.org:8444 {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# Kept identical to production on purpose: a CSP that only bites in
+		# production is a CSP nobody tests.
+		Content-Security-Policy "default-src 'self'; connect-src 'self' https://api.zenmoney.ru https://api.zenmoney.app; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		# The development stand is not meant to be indexed.
+		X-Robots-Tag "noindex, nofollow"
+	}
+
+	# To close the stand off later, uncomment and generate the hash with
+	# `caddy hash-password`. Note that the ZenMoney sign-in popup returns to this
+	# origin, so test the whole login flow after enabling it.
+	# basic_auth {
+	# 	<user> <bcrypt-hash>
+	# }
+
+	handle {
+		reverse_proxy zerno-dev-web:8080
+	}
+}

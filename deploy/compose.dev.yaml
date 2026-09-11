@@ -1,0 +1,30 @@
+name: zerno-dev
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
+services:
+  web:
+    image: ${WEB_IMAGE:?set WEB_IMAGE in .release.env}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /var/cache/nginx:size=32m,mode=0700,uid=101,gid=101
+    networks:
+      zerno-ingress:
+        aliases: [zerno-dev-web]
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    logging: *default-logging
+
+networks:
+  zerno-ingress:
+    external: true

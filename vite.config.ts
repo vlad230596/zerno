@@ -21,11 +21,16 @@ export default defineConfig({
   ],
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // Source maps ship readable sources, so they are opt-in: the development
+    // stand switches them on, releases do not.
+    sourcemap: process.env.APP_SOURCEMAP === 'true',
   },
   envPrefix: 'REACT_APP_',
   define: {
-    APP_VERSION: JSON.stringify(process.env.npm_package_version),
+    // CI passes APP_VERSION explicitly; local runs fall back to package.json.
+    APP_VERSION: JSON.stringify(
+      process.env.APP_VERSION || process.env.npm_package_version
+    ),
   },
   test: {
     globals: true,

@@ -1,0 +1,23 @@
+# Add this site block to the shared Caddy configuration on the server, with the
+# real hostname in place of the placeholder. The port is not exclusive to this
+# application: Caddy selects the site by TLS SNI, so several hostnames can share
+# one port. Run `caddy validate` before reloading.
+zerno.example.org:8443 {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# connect-src carries both ZenMoney endpoints because the sign-in screen
+		# lets a user pick either one. The Google Fonts pair is what index.html
+		# loads; style-src needs 'unsafe-inline' for Emotion, which is how MUI
+		# ships every component style.
+		Content-Security-Policy "default-src 'self'; connect-src 'self' https://api.zenmoney.ru https://api.zenmoney.app; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	}
+
+	handle {
+		reverse_proxy zerno-web:8080
+	}
+}
