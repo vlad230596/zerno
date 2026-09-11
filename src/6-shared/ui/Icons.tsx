@@ -79,6 +79,22 @@ export const SettingsIcon = createFeatherIcon(
   'settings'
 )
 
+export const NotificationIcon = createFeatherIcon(
+  <>
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </>,
+  'bell'
+)
+
+export const SmartphoneIcon = createFeatherIcon(
+  <>
+    <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+    <line x1="12" y1="18" x2="12.01" y2="18" />
+  </>,
+  'smartphone'
+)
+
 export const SaveAltIcon = createFeatherIcon(
   <>
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>

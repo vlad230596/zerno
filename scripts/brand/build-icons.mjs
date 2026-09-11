@@ -253,6 +253,7 @@ const write = (name, buf) => {
 write('192px.png', encodePNG(iconCanvas(192, { bleed: false, markFrac: 0.61 })))
 write('512px.png', encodePNG(iconCanvas(512, { bleed: false, markFrac: 0.61 })))
 write('192px-maskable.png', encodePNG(iconCanvas(192, { bleed: true, markFrac: 0.52 })))
+write('512px-maskable.png', encodePNG(iconCanvas(512, { bleed: true, markFrac: 0.52 })))
 write('apple-touch-icon.png', encodePNG(iconCanvas(180, { bleed: true, markFrac: 0.62 })))
 
 /* Shortcut icons: same plate, plainer glyphs. */

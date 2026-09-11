@@ -1,5 +1,5 @@
 import { openDB } from 'idb'
-import { idbBaseName, idbStoreName } from '../config'
+import { idbBaseName, idbStoreName } from './idbConfig'
 
 const VERSION = 1
 

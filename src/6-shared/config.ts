@@ -19,5 +19,4 @@ export const appPublicUrl = import.meta.env.BASE_URL
 export const isProduction = import.meta.env.PROD
 
 // Database parameters
-export const idbBaseName = 'zerro_data'
-export const idbStoreName = 'serverData'
+export { idbBaseName, idbStoreName } from './api/idbConfig'

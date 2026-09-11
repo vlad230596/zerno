@@ -493,6 +493,19 @@ export const en: typeof ru = {
 
   settings: {
     settings: 'Settings',
+    installApp: 'Install app',
+    backgroundCheck: 'Background check (test)',
+    backgroundCheckDescription:
+      'Chrome wakes the app now and then; it adds up the spending since the previous check and sends a notification',
+    backgroundCheckNow: 'Check now',
+    backgroundCheckNoAnswer:
+      'The worker did not answer — try reloading the page',
+    backgroundCheckError: {
+      unsupported: 'This browser cannot wake the app in the background',
+      noPermission: 'Without notification permission the check has nothing to show',
+      refused: 'Chrome is not granting it yet. Install the app and use it for a couple of days',
+      noToken: 'Sign in to ZenMoney first',
+    },
     language: 'Language',
     advancedSettings: 'Advanced settings...',
     export: 'Export',

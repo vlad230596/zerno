@@ -30,6 +30,15 @@ export async function fetchDiff(
       Authorization: `Bearer ${token}`,
     },
   })
+  /*
+    A rejected request answers with plain text, not JSON — reading it as JSON
+    turns an expired token into `Unexpected token 'U'`, which says nothing.
+  */
+  if (!response.ok) {
+    const text = (await response.text()).trim()
+    throw Error(`${response.status} ${text || response.statusText}`)
+  }
+
   const json = await response.json()
   if (json.error) throw Error(JSON.stringify(json.error))
 

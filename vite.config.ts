@@ -26,10 +26,24 @@ export default defineConfig({
     mdx(),
     VitePWA({
       registerType: 'autoUpdate',
-      filename: 'service-worker.js',
-      workbox: {
+      // The worker is hand-written (`src/service-worker.ts`): it has to answer
+      // `periodicsync`, which a generated worker knows nothing about. Workbox
+      // still injects the precache list into it.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'service-worker.ts',
+      // The manifest is hand-written in `public/manifest.json` and linked from
+      // `index.html`. Left to itself the plugin emits a second, generated one
+      // and injects a second <link rel="manifest">; the specification says the
+      // first link wins, so the right manifest only kept winning by accident.
+      manifest: false,
+      injectManifest: {
         // Increase the default 2,097,152 (2MiB) limit
         maximumFileSizeToCacheInBytes: 3_000_000,
+        // The plugin registers the worker as a classic script, so build one.
+        // The default ES output only happens to work while nothing in the
+        // bundle needs an import.
+        rollupFormat: 'iife',
       },
     }),
   ],

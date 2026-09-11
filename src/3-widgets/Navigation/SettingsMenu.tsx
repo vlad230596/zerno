@@ -15,6 +15,8 @@ import {
   AccountBalanceWalletIcon,
   GlobeIcon,
   TagIcon,
+  SmartphoneIcon,
+  NotificationIcon,
 } from '6-shared/ui/Icons'
 import {
   Divider,
@@ -43,6 +45,8 @@ import { logOut } from '4-features/authorization'
 import { exportCSV } from '4-features/export/exportCSV'
 import { exportJSON } from '4-features/export/exportJSON'
 import { clearLocalData } from '4-features/localData'
+import { useInstallPrompt } from '4-features/installApp'
+import { useBackgroundCheck } from '4-features/backgroundCheck'
 import { convertZmBudgetsToZerro } from '4-features/budget/convertZmBudgetsToZerro'
 import { registerPopover } from '6-shared/historyPopovers'
 import { useConfirm } from '6-shared/ui/SmartConfirm'
@@ -81,11 +85,13 @@ const Settings = (props: { onClose: () => void; showLinks?: boolean }) => {
     <>
       {props.showLinks && <NavItems onClose={props.onClose} />}
       <ListSubheader>{t('settings')}</ListSubheader>
+      <InstallAppItem onClose={props.onClose} />
       <ThemeItem onClose={props.onClose} />
       <ReloadDataItem onClose={props.onClose} />
       <AutoSyncItem />
       {isExpanded ? (
         <>
+          <BackgroundCheckItem />
           <IconModeItem />
           <BudgetSettingsItem />
         </>
@@ -141,6 +147,31 @@ function ExportJsonItem() {
         <SaveAltIcon />
       </ListItemIcon>
       <ListItemText>{t('fullBackup')}</ListItemText>
+    </MenuItem>
+  )
+}
+
+/**
+ * Only rendered where the browser offers to install: Chromium fires
+ * `beforeinstallprompt`, everyone else installs from their own menu, and an
+ * already-installed application has nothing to offer.
+ */
+function InstallAppItem({ onClose }: ItemProps) {
+  const { t } = useTranslation('settings')
+  const install = useInstallPrompt()
+  if (!install) return null
+  const handleClick = async () => {
+    sendEvent('Settings: install app')
+    onClose()
+    const outcome = await install()
+    if (outcome) sendEvent(`Settings: install ${outcome}`)
+  }
+  return (
+    <MenuItem onClick={handleClick}>
+      <ListItemIcon>
+        <SmartphoneIcon />
+      </ListItemIcon>
+      <ListItemText>{t('installApp')}</ListItemText>
     </MenuItem>
   )
 }
@@ -264,6 +295,62 @@ function AutoSyncItem() {
       <ListItemText>{t('regularSync')}</ListItemText>
       <Switch edge="end" checked={regular} />
     </MenuItem>
+  )
+}
+
+/**
+ * A test harness, deliberately parked under the advanced settings: the check
+ * only reports what it saw, and only Chromium wakes it at all.
+ */
+function BackgroundCheckItem() {
+  const { t } = useTranslation('settings')
+  const setSnackbar = useSnackbar()
+  const { status, enable, disable, runNow } = useBackgroundCheck()
+
+  if (status === 'loading' || status === 'unsupported') return null
+
+  const toggle = async () => {
+    if (status === 'on') {
+      sendEvent('Settings: background check off')
+      await disable()
+      return
+    }
+    sendEvent('Settings: background check on')
+    const error = await enable()
+    if (error) setSnackbar({ message: t(`backgroundCheckError.${error}`) })
+  }
+
+  return (
+    <>
+      <MenuItem onClick={toggle}>
+        <ListItemIcon>
+          <NotificationIcon />
+        </ListItemIcon>
+        <ListItemText
+          sx={{ whiteSpace: 'normal' }}
+          primary={t('backgroundCheck')}
+          secondary={t('backgroundCheckDescription')}
+        />
+        <Switch edge="end" checked={status === 'on'} />
+      </MenuItem>
+
+      {status === 'on' && (
+        <MenuItem
+          onClick={async () => {
+            sendEvent('Settings: background check now')
+            const report = await runNow()
+            setSnackbar({
+              message: report
+                ? `${report.title} — ${report.body}`
+                : t('backgroundCheckNoAnswer'),
+            })
+          }}
+        >
+          <ListItemIcon />
+          <ListItemText>{t('backgroundCheckNow')}</ListItemText>
+        </MenuItem>
+      )}
+    </>
   )
 }
 

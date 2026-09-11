@@ -4,14 +4,37 @@
     {
       "name": "zerro-dev",
       "runtimeExecutable": "corepack",
-      "runtimeArgs": ["pnpm", "run", "dev"],
+      "runtimeArgs": [
+        "pnpm",
+        "run",
+        "dev"
+      ],
       "port": 3000
     },
     {
       "name": "zerro-dev-alt",
       "runtimeExecutable": "corepack",
-      "runtimeArgs": ["pnpm", "exec", "vite", "--port", "3011"],
+      "runtimeArgs": [
+        "pnpm",
+        "exec",
+        "vite",
+        "--port",
+        "3011"
+      ],
       "port": 3011
+    },
+    {
+      "name": "zerno-preview",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": [
+        "pnpm",
+        "exec",
+        "vite",
+        "preview",
+        "--port",
+        "3012"
+      ],
+      "port": 3012
     }
   ]
 }

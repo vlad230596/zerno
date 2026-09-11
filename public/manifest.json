@@ -1,8 +1,17 @@
 {
-  "short_name": "Zerno",
+  "id": "/?source=pwa",
   "name": "Zerno",
+  "short_name": "Zerno",
+  "description": "Бюджет по конвертам, цели и полная история трат — вплоть до отдельных позиций в заказе.",
+  "lang": "ru",
+  "dir": "ltr",
+  "categories": ["finance", "productivity"],
   "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "theme_color": "#241D14",
   "background_color": "#241D14",
   "icons": [
@@ -21,6 +30,12 @@
     {
       "src": "icons/192px-maskable.png",
       "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/512px-maskable.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     }
