@@ -5,7 +5,7 @@ import { zenmoney } from '6-shared/api/zenmoney'
 import { setToken } from 'store/token'
 import { applyServerPatch, resetData } from 'store/data'
 import { syncData } from '4-features/sync'
-import { convertZmToLocal, workerMethods } from 'worker'
+import { convertZmToLocal, sync, workerMethods } from 'worker'
 import { clearLocalData, saveDataLocally } from './localData'
 import { zmPreferenceStorage } from '6-shared/api/zmPreferenceStorage'
 import { getDemoData } from 'demoData'
@@ -35,6 +35,42 @@ export const logIn =
 
     // Sync data
     dispatch(syncData())
+  }
+
+/**
+ * Signs in with a token pasted by hand, for when OAuth is not an option: the
+ * ZenMoney documentation says a token can be obtained from any already
+ * registered service without registering one of your own.
+ *
+ * Resolves to an error message, or to null when the sign-in succeeded.
+ */
+export const logInWithToken =
+  (rawToken: string): AppThunk<Promise<string | null>> =>
+  async dispatch => {
+    const token = rawToken.trim()
+    if (!token) return 'empty'
+
+    /*
+      The token is verified BEFORE it reaches the store. Storing it first flips
+      the application into its signed-in state, which unmounts the sign-in
+      screen; a token the server then rejects would bounce the user back to a
+      freshly mounted screen with no error on it — silently, as if nothing had
+      happened.
+
+      The probe asks for the full diff, the same request a first sync makes,
+      because that is the one shape known to be accepted. It costs one extra
+      fetch, once, on a manual sign-in.
+    */
+    const probe = await sync(token, zmPreferenceStorage.get(), {
+      serverTimestamp: 0,
+    })
+    if (probe.error || !probe.data) return probe.error || 'failed'
+
+    dispatch(logOut())
+    tokenStorage.set(token)
+    dispatch(setToken(token))
+    dispatch(syncData())
+    return null
   }
 
 export const loadBackup =

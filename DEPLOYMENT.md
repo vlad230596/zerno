@@ -44,8 +44,16 @@ Production and development have separate root-owned deploy scripts on purpose.
 ## ZenMoney keys: one per origin
 
 ZenMoney binds `redirect_uri` to a consumer key, and Vite inlines the key into
-the bundle at build time. Every origin therefore needs its own registration on
-[developers.zenmoney.ru](http://developers.zenmoney.ru):
+the bundle at build time, so every origin needs its own key pair.
+
+Registration is not self-service. `developers.zenmoney.ru` no longer exists; the
+current route is a moderated form linked from the
+[ZenMoney API wiki](https://github.com/zenmoney/ZenPlugins/wiki/ZenMoney-API),
+which asks for a project name, a contact email and one callback URL. The keys
+arrive by email, and the operators state they only register real projects that
+implement OAuth 2.0. One submission covers one callback URL, so each stand needs
+its own — and it helps if the URL already serves the application when the
+request is reviewed.
 
 | Origin | Used by |
 | --- | --- |

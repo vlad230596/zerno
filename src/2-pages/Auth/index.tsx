@@ -5,6 +5,7 @@ import {
   Button,
   Fade,
   Stack,
+  TextField,
   ButtonOwnProps,
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
@@ -13,7 +14,12 @@ import { zenmoney } from '6-shared/api/zenmoney'
 import { Logo } from '6-shared/ui/Logo'
 
 import { useAppDispatch } from 'store'
-import { loadBackup, loadDemoData, logIn } from '4-features/authorization'
+import {
+  loadBackup,
+  loadDemoData,
+  logIn,
+  logInWithToken,
+} from '4-features/authorization'
 
 zenmoney.processAuthCode()
 
@@ -23,6 +29,21 @@ export default function Auth() {
   const theme = useAppTheme()
   const [logoIn, setLogoIn] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [tokenOpen, setTokenOpen] = useState(false)
+  const [token, setToken] = useState('')
+  const [tokenError, setTokenError] = useState('')
+  const [tokenPending, setTokenPending] = useState(false)
+
+  const submitToken = async () => {
+    if (!token.trim()) return setTokenError(t('tokenEmpty'))
+    setTokenPending(true)
+    setTokenError('')
+    const error = await dispatch(logInWithToken(token))
+    setTokenPending(false)
+    // On success the application swaps this screen out, so there is nothing
+    // left to report here.
+    if (error) setTokenError(t('tokenRejected'))
+  }
   setTimeout(() => setLogoIn(true), 300)
   const parseFiles = (fileList: FileList) => dispatch(loadBackup(fileList[0]))
 
@@ -78,6 +99,51 @@ export default function Auth() {
             onClick={() => dispatch(logIn('ru'))}
             children={t('btnLogin')}
           />
+        </Fade>
+
+        <Fade in timeout={2000}>
+          <Box sx={{ width: 300, maxWidth: '100%' }}>
+            {tokenOpen ? (
+              <Stack spacing={1.5}>
+                <TextField
+                  fullWidth
+                  autoFocus
+                  size="small"
+                  label={t('tokenLabel')}
+                  value={token}
+                  disabled={tokenPending}
+                  error={!!tokenError}
+                  helperText={tokenError || t('tokenHint')}
+                  onChange={e => {
+                    setToken(e.target.value)
+                    setTokenError('')
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') submitToken()
+                  }}
+                />
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={submitToken}
+                  disabled={tokenPending}
+                >
+                  {tokenPending ? t('tokenChecking') : t('btnTokenSubmit')}
+                </Button>
+              </Stack>
+            ) : (
+              <Box sx={{ textAlign: 'center' }}>
+                <Button
+                  variant="text"
+                  color="primary"
+                  size="small"
+                  onClick={() => setTokenOpen(true)}
+                >
+                  {t('btnTokenLogin')}
+                </Button>
+              </Box>
+            )}
+          </Box>
         </Fade>
 
         <Fade in timeout={3000}>

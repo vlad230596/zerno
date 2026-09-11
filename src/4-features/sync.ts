@@ -15,7 +15,7 @@ import { zmPreferenceStorage } from '6-shared/api/zmPreferenceStorage'
 import { ruleModel } from '5-entities/rule'
 
 /** All syncs with zenmoney goes through this thunk */
-export const syncData = (): AppThunk => async (dispatch, getState) => {
+export const syncData = (): AppThunk<Promise<void>> => async (dispatch, getState) => {
   const state = getState()
   const diff: TDiff = {
     ...(getDiff(state) || {}),
