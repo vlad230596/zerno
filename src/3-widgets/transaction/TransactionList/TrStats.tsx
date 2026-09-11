@@ -92,13 +92,20 @@ export const TrStats: FC<TrStatsProps> = ({ transactions, onPeriodClick }) => {
 
   return (
     <Paper elevation={2} sx={{ mt: 1, overflow: 'hidden' }}>
+      {/*
+        Three totals plus the counter don't fit a phone in one line, and cut off
+        amounts say nothing. So on XS the row wraps: counter and chevron stay on
+        top, totals move under them and get the full width of the card
+      */}
       <Box
         onClick={toggleExpanded}
         sx={{
           display: 'flex',
           alignItems: 'center',
-          gap: 2,
-          px: 2,
+          flexWrap: 'wrap',
+          columnGap: 2,
+          rowGap: 0.5,
+          px: { xs: 1.5, sm: 2 },
           py: 1,
           cursor: 'pointer',
           userSelect: 'none',
@@ -108,11 +115,26 @@ export const TrStats: FC<TrStatsProps> = ({ transactions, onPeriodClick }) => {
           {t('found', { count: transactions.length })}
         </Typography>
 
+        <ChevronDownIcon
+          fontSize="small"
+          sx={{
+            order: { xs: 0, sm: 2 },
+            ml: { xs: 'auto', sm: 0 },
+            flexShrink: 0,
+            color: 'text.secondary',
+            transition: '200ms',
+            transform: expanded ? 'rotate(180deg)' : 'none',
+          }}
+        />
+
         <Box
           sx={{
-            ml: 'auto',
+            order: 1,
+            width: { xs: '100%', sm: 'auto' },
+            ml: { sm: 'auto' },
             display: 'flex',
-            gap: 2,
+            justifyContent: 'flex-end',
+            gap: { xs: 1.5, sm: 2 },
             alignItems: 'baseline',
             minWidth: 0,
           }}
@@ -127,16 +149,6 @@ export const TrStats: FC<TrStatsProps> = ({ transactions, onPeriodClick }) => {
             <Total label={t('net')} value={income - outcome} />
           )}
         </Box>
-
-        <ChevronDownIcon
-          fontSize="small"
-          sx={{
-            flexShrink: 0,
-            color: 'text.secondary',
-            transition: '200ms',
-            transform: expanded ? 'rotate(180deg)' : 'none',
-          }}
-        />
       </Box>
 
       <Collapse in={expanded} unmountOnExit>

@@ -224,6 +224,10 @@ export const TransactionList: FC<TTransactionListProps> = props => {
             px: 1,
             pt: 1,
             position: 'relative',
+            // The search bar and the stats panel have a wide min-content size.
+            // Without this the column refuses to shrink under it and the whole
+            // list sticks out of the screen on a phone
+            minWidth: 0,
           },
           ...(Array.isArray(sx) ? sx : [sx]),
         ]}
