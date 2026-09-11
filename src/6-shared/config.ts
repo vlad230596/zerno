@@ -9,7 +9,12 @@ export const ymid = import.meta.env.REACT_APP_YMID as string
 export const gaid = import.meta.env.REACT_APP_GAID as string
 
 // Info about the app
+/** `1.2.3` for a released tag, `master` for the development stand. */
 export const appVersion = APP_VERSION
+/** Short commit the bundle was built from. Empty for local builds. */
+export const appRevision = APP_REVISION
+/** ISO timestamp of the build. */
+export const appBuildDate = APP_BUILD_DATE
 export const appPublicUrl = import.meta.env.BASE_URL
 export const isProduction = import.meta.env.PROD
 

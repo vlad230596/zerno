@@ -217,26 +217,32 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
         }}
       >
         {trType !== 'income' && (
-          <AmountInput
-            label={t('otcomeFrom', { account: outcomeAccount.title })}
-            currency={outcomeCurrency}
-            value={localOutcome}
-            onChange={setLocalOutcome}
-            selectOnFocus
-            fullWidth
-            size="small"
-          />
+          <Stack spacing={1}>
+            <AccountLine label={t('accountFrom')} title={outcomeAccount.title} />
+            <AmountInput
+              label={t('amountOutcome')}
+              currency={outcomeCurrency}
+              value={localOutcome}
+              onChange={setLocalOutcome}
+              selectOnFocus
+              fullWidth
+              size="small"
+            />
+          </Stack>
         )}
         {trType !== 'outcome' && (
-          <AmountInput
-            label={t('incomeTo', { account: incomeAccount.title })}
-            currency={incomeCurrency}
-            value={localIncome}
-            onChange={setLocalIncome}
-            selectOnFocus
-            fullWidth
-            size="small"
-          />
+          <Stack spacing={1}>
+            <AccountLine label={t('accountTo')} title={incomeAccount.title} />
+            <AmountInput
+              label={t('amountIncome')}
+              currency={incomeCurrency}
+              value={localIncome}
+              onChange={setLocalIncome}
+              selectOnFocus
+              fullWidth
+              size="small"
+            />
+          </Stack>
         )}
         <Stack direction="row" spacing={2}>
           <DatePicker
@@ -326,6 +332,20 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
     </Box>
   )
 }
+
+/**
+ * Which account the money moved on. Account titles run long, so the account
+ * gets a line of its own above the amount instead of riding along in the
+ * field's label, where it used to be cut off.
+ */
+const AccountLine: FC<{ label: string; title: string }> = ({ label, title }) => (
+  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+    {label}:{' '}
+    <Box component="span" sx={{ color: 'text.primary' }}>
+      {title}
+    </Box>
+  </Typography>
+)
 
 /**
  * Internal ZenMoney id of the transaction.

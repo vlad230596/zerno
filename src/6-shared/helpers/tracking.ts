@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/browser'
 import { ErrorInfo } from 'react'
 import { History } from 'history'
 import {
+  appRevision,
   appVersion,
   gaid,
   isProduction,
@@ -10,9 +11,13 @@ import {
   ymid,
 } from '6-shared/config'
 
+// Every `master` build reports the same version, so the commit is what tells
+// two development releases apart in Sentry.
+const sentryRelease = appRevision ? `${appVersion}+${appRevision}` : appVersion
+
 export function initSentry() {
   if (isProduction && sentryDSN) {
-    Sentry.init({ release: appVersion, dsn: sentryDSN })
+    Sentry.init({ release: sentryRelease, dsn: sentryDSN })
   }
 }
 

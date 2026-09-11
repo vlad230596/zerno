@@ -112,6 +112,7 @@ jobs:
       - name: Build production bundle
         env:
           APP_VERSION: ${{ needs.prepare.outputs.version }}
+          APP_BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
           REACT_APP_REDIRECT_URI: ${{ vars.PRODUCTION_URL }}
           REACT_APP_CLIENT_ID: ${{ secrets.ZENMONEY_CLIENT_ID }}
           REACT_APP_CLIENT_SECRET: ${{ secrets.ZENMONEY_CLIENT_SECRET }}

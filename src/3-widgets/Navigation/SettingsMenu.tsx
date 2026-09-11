@@ -31,7 +31,8 @@ import {
 import { sendEvent } from '6-shared/helpers/tracking'
 import { useSnackbar } from '6-shared/ui/SnackbarProvider'
 import { AdaptivePopover } from '6-shared/ui/AdaptivePopover'
-import { appVersion } from '6-shared/config'
+import { appBuildDate, appRevision, appVersion } from '6-shared/config'
+import { formatDate } from '6-shared/helpers/date'
 
 import { useAppDispatch } from 'store'
 import { resetData } from 'store/data'
@@ -351,8 +352,21 @@ function LogOutItem({ onClose }: ItemProps) {
   )
 }
 
+/**
+ * The foot of the menu says which build is running: a SemVer for a released
+ * tag, `master` plus the commit for the development stand. The build time
+ * tells apart two deployments of the same commit.
+ */
 function VersionItem({ onClose }: ItemProps) {
-  const { t } = useTranslation('settings')
+  // One line, so it still fits a phone: version, the commit when there is one,
+  // and a numeric build time. No label — nothing else lives down here.
+  const line = [
+    appVersion,
+    appRevision,
+    formatDate(new Date(appBuildDate), 'dd.MM.yyyy HH:mm'),
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <MenuItem
       onClick={() => {
@@ -362,8 +376,8 @@ function VersionItem({ onClose }: ItemProps) {
     >
       <ListItemIcon />
       <ListItemText>
-        <Typography variant="overline" sx={{ color: 'text.secondary' }}>
-          {t('version', { version: appVersion })}
+        <Typography variant="caption" noWrap sx={{ color: 'text.secondary' }}>
+          {line}
         </Typography>
       </ListItemText>
     </MenuItem>

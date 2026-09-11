@@ -509,7 +509,6 @@ export const en: typeof ru = {
     convertBudgetsFromZm: 'Convert budgets from Zenmoney',
     budgetsConverted: '✅ Budgets converted ({{budgets}})',
     logOut: 'Log out',
-    version: 'Version: {{version}}',
   },
 
   transactions: {
@@ -520,8 +519,10 @@ export const en: typeof ru = {
   },
 
   transaction: {
-    otcomeFrom: 'Expense from {{account}}',
-    incomeTo: 'Income to {{account}}',
+    accountFrom: 'From account',
+    accountTo: 'To account',
+    amountOutcome: 'Expense',
+    amountIncome: 'Income',
     date: 'Date',
     time: 'Time',
     payee: 'Payment location',

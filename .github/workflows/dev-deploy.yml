@@ -44,6 +44,7 @@ jobs:
     outputs:
       sha: ${{ steps.version.outputs.sha }}
       version: ${{ steps.version.outputs.version }}
+      revision: ${{ steps.version.outputs.revision }}
       build_date: ${{ steps.version.outputs.build_date }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -63,7 +64,10 @@ jobs:
             exit 64
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          # `version` is the immutable identity of this deployment; the bundle
+          # shows the branch it came from plus `revision`.
           echo "version=dev-${sha:0:12}" >> "$GITHUB_OUTPUT"
+          echo "revision=${sha:0:7}" >> "$GITHUB_OUTPUT"
           echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
   publish:
@@ -94,7 +98,9 @@ jobs:
       # the development origin and its own ZenMoney consumer key.
       - name: Build development bundle
         env:
-          APP_VERSION: ${{ needs.prepare.outputs.version }}
+          APP_VERSION: master
+          APP_REVISION: ${{ needs.prepare.outputs.revision }}
+          APP_BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
           APP_SOURCEMAP: 'true'
           REACT_APP_REDIRECT_URI: ${{ vars.DEV_URL }}
           REACT_APP_CLIENT_ID: ${{ secrets.ZENMONEY_DEV_CLIENT_ID }}

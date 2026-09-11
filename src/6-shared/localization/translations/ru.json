@@ -484,8 +484,7 @@
     "useZmBudgetsDescription": "Использовать те же бюджеты что и ДМ",
     "convertBudgetsFromZm": "Конвертировать бюджеты из Дзен-мани",
     "budgetsConverted": "✅ Бюджеты сконвертированы ({{budgets}})",
-    "logOut": "Выйти",
-    "version": "Версия: {{version}}"
+    "logOut": "Выйти"
   },
 
   "transactions": {
@@ -495,8 +494,10 @@
   },
 
   "transaction": {
-    "otcomeFrom": "Расход c {{account}}",
-    "incomeTo": "Доход на {{account}}",
+    "accountFrom": "Счёт списания",
+    "accountTo": "Счёт зачисления",
+    "amountOutcome": "Расход",
+    "amountIncome": "Доход",
     "date": "Дата",
     "time": "Время",
     "payee": "Место платежа",
