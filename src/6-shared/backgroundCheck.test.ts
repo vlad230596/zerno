@@ -1,7 +1,11 @@
 import type { TZmTransaction } from './types'
 
 import { describe, expect, it } from 'vitest'
-import { formatElapsed, summarizeSpending } from './backgroundCheck'
+import {
+  formatElapsed,
+  selectExpenses,
+  summarizeSpending,
+} from './backgroundCheck'
 
 const RUB = 2
 const USD = 1
@@ -44,6 +48,24 @@ const symbols = new Map([
   [RUB, '₽'],
   [USD, '$'],
 ])
+
+describe('selectExpenses', () => {
+  it('keeps only money that left and did not come back', () => {
+    const expense = makeTr({ id: 'spent', outcome: 100 })
+    const found = selectExpenses([
+      expense,
+      makeTr({ id: 'transfer', outcome: 5000, income: 5000 }),
+      makeTr({ id: 'income', income: 900 }),
+      makeTr({ id: 'deleted', outcome: 700, deleted: true }),
+    ])
+    expect(found.map(tr => tr.id)).toEqual(['spent'])
+  })
+
+  it('answers empty for nothing at all', () => {
+    expect(selectExpenses()).toEqual([])
+    expect(selectExpenses([])).toEqual([])
+  })
+})
 
 describe('summarizeSpending', () => {
   it('reports nothing when the period brought no expenses', () => {

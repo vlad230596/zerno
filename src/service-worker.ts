@@ -5,12 +5,17 @@ import { clientsClaim } from 'workbox-core'
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 import { fetchDiff } from './6-shared/api/zenmoney/fetchDiff'
 import { storage } from './6-shared/api/storage'
-import type { TBackgroundState, TCheckReport } from './6-shared/backgroundCheck'
+import type {
+  TBackgroundState,
+  TCheckReport,
+  TRunCheckMessage,
+} from './6-shared/backgroundCheck'
 import {
   CHECK_TAG,
   RUN_CHECK_MESSAGE,
   formatElapsed,
   readBackgroundState,
+  selectExpenses,
   summarizeSpending,
   writeBackgroundState,
 } from './6-shared/backgroundCheck'
@@ -30,11 +35,19 @@ precacheAndRoute(self.__WB_MANIFEST)
 
 /* ---------------------------------------------------------------- checking */
 
-type Trigger = 'periodic' | 'manual'
+type Trigger = 'periodic' | 'manual' | 'foreground'
+
+const TITLES: Record<Trigger, string> = {
+  periodic: 'Фоновая проверка',
+  manual: 'Проверка вручную',
+  foreground: 'Новые траты',
+}
 
 type TReport = TCheckReport & {
   /** Where to move the cursor, once the report has reached the user. */
   nextState?: TBackgroundState
+  /** False when there was simply nothing to tell. */
+  worthTelling: boolean
 }
 
 /**
@@ -47,13 +60,14 @@ type TReport = TCheckReport & {
  * sync.
  */
 async function buildReport(trigger: Trigger): Promise<TReport> {
-  const title = trigger === 'manual' ? 'Проверка вручную' : 'Фоновая проверка'
+  const title = TITLES[trigger]
   const state = await readBackgroundState()
 
   if (!state?.token) {
     return {
       title,
       body: 'Нет сохранённого токена. Откройте Zerno и включите проверку заново.',
+      worthTelling: true,
     }
   }
 
@@ -71,6 +85,7 @@ async function buildReport(trigger: Trigger): Promise<TReport> {
     return {
       title,
       body: `За ${elapsed} · ${spending}`,
+      worthTelling: selectExpenses(diff.transaction).length > 0,
       nextState: {
         ...state,
         lastRunAt: startedAt,
@@ -80,28 +95,41 @@ async function buildReport(trigger: Trigger): Promise<TReport> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     // No `nextState`: the cursor stays put so the next run covers this period.
-    return { title: `${title}: нет доступа к API`, body: `За ${elapsed} · ${message}` }
+    return {
+      title: `${title}: нет доступа к API`,
+      body: `За ${elapsed} · ${message}`,
+      worthTelling: true,
+    }
   }
 }
 
 async function runBackgroundCheck(
   trigger: Trigger,
-  respond?: (report: TCheckReport) => void
+  options: { respond?: (report: TCheckReport) => void; quiet?: boolean } = {}
 ) {
   const report = await buildReport(trigger)
   let reported = false
 
-  if (respond) {
-    respond({ title: report.title, body: report.body })
+  if (options.respond) {
+    options.respond({ title: report.title, body: report.body })
     reported = true
   }
 
-  try {
-    await notify(report.title, report.body)
+  /*
+    A quiet run is the application polling while it happens to be open. Silence
+    is the right answer when nothing was spent — but the cursor still moves,
+    because there was nothing to lose.
+  */
+  if (options.quiet && !report.worthTelling) {
     reported = true
-  } catch (error) {
-    // Notifications may be switched off; the page asking directly still counts.
-    console.warn('Notification was not shown', error)
+  } else {
+    try {
+      await notify(report.title, report.body)
+      reported = true
+    } catch (error) {
+      // Notifications may be off; the page asking directly still counts.
+      console.warn('Notification was not shown', error)
+    }
   }
 
   /*
@@ -151,9 +179,13 @@ self.addEventListener('periodicsync', event => {
 
 self.addEventListener('message', event => {
   if (event.data?.type !== RUN_CHECK_MESSAGE) return
+  const message = event.data as TRunCheckMessage
   const port = event.ports[0]
   event.waitUntil(
-    runBackgroundCheck('manual', report => port?.postMessage(report))
+    runBackgroundCheck(message.trigger, {
+      respond: report => port?.postMessage(report),
+      quiet: message.quiet,
+    })
   )
 })
 

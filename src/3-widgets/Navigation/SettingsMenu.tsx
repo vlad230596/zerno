@@ -46,7 +46,7 @@ import { exportCSV } from '4-features/export/exportCSV'
 import { exportJSON } from '4-features/export/exportJSON'
 import { clearLocalData } from '4-features/localData'
 import { useInstallPrompt } from '4-features/installApp'
-import { useBackgroundCheck } from '4-features/backgroundCheck'
+import { useBackgroundCheck, runNow } from '4-features/backgroundCheck'
 import { convertZmBudgetsToZerro } from '4-features/budget/convertZmBudgetsToZerro'
 import { registerPopover } from '6-shared/historyPopovers'
 import { useConfirm } from '6-shared/ui/SmartConfirm'
@@ -300,14 +300,14 @@ function AutoSyncItem() {
 
 /**
  * A test harness, deliberately parked under the advanced settings: the check
- * only reports what it saw, and only Chromium wakes it at all.
+ * only reports what it saw.
  */
 function BackgroundCheckItem() {
   const { t } = useTranslation('settings')
   const setSnackbar = useSnackbar()
-  const { status, enable, disable, runNow } = useBackgroundCheck()
+  const { status, periodic, enable, disable } = useBackgroundCheck()
 
-  if (status === 'loading' || status === 'unsupported') return null
+  if (status === 'loading') return null
 
   const toggle = async () => {
     if (status === 'on') {
@@ -316,8 +316,17 @@ function BackgroundCheckItem() {
       return
     }
     sendEvent('Settings: background check on')
-    const error = await enable()
-    if (error) setSnackbar({ message: t(`backgroundCheckError.${error}`) })
+    const result = await enable()
+    if (result.error) {
+      setSnackbar({ message: t(`backgroundCheckError.${result.error}`) })
+      return
+    }
+    sendEvent(`Settings: background periodic ${result.periodic}`)
+    setSnackbar({
+      message: result.periodic
+        ? t('backgroundCheckOn')
+        : t('backgroundCheckForegroundOnly', { reason: result.periodicReason }),
+    })
   }
 
   return (
@@ -329,7 +338,13 @@ function BackgroundCheckItem() {
         <ListItemText
           sx={{ whiteSpace: 'normal' }}
           primary={t('backgroundCheck')}
-          secondary={t('backgroundCheckDescription')}
+          secondary={t(
+            status === 'on' && periodic
+              ? 'backgroundCheckReachBackground'
+              : status === 'on'
+                ? 'backgroundCheckReachForeground'
+                : 'backgroundCheckDescription'
+          )}
         />
         <Switch edge="end" checked={status === 'on'} />
       </MenuItem>
@@ -338,7 +353,7 @@ function BackgroundCheckItem() {
         <MenuItem
           onClick={async () => {
             sendEvent('Settings: background check now')
-            const report = await runNow()
+            const report = await runNow('manual')
             setSnackbar({
               message: report
                 ? `${report.title} — ${report.body}`

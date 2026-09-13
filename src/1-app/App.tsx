@@ -16,6 +16,7 @@ import { getLoginState } from 'store/token'
 import { getLastSyncTime } from 'store/data/selectors'
 import { userModel } from '5-entities/user'
 import { RegularSyncHandler } from '3-widgets/RegularSyncHandler'
+import { BackgroundCheckHandler } from '3-widgets/BackgroundCheckHandler'
 import Nav from '3-widgets/Navigation'
 import { MobileNavigation } from '3-widgets/Navigation'
 import ErrorBoundary from '3-widgets/ErrorBoundary'
@@ -85,6 +86,7 @@ export default function App() {
     <Router history={history}>
       <PopoverManager>
         <RegularSyncHandler />
+        <BackgroundCheckHandler />
         <Layout isLoggedIn={isLoggedIn}>
           <ErrorBoundary>
             <Suspense fallback={<FallbackLoader />}>

@@ -3,11 +3,12 @@ import { useAppSelector } from 'store'
 import { getToken } from 'store/token'
 import { getLastSyncTime } from 'store/data/selectors'
 import { zmPreferenceStorage } from '6-shared/api/zmPreferenceStorage'
-import type { TCheckReport } from '6-shared/backgroundCheck'
+import type { TCheckReport, TRunCheckMessage } from '6-shared/backgroundCheck'
 import {
   CHECK_TAG,
   RUN_CHECK_MESSAGE,
   clearBackgroundState,
+  readBackgroundState,
   writeBackgroundState,
 } from '6-shared/backgroundCheck'
 
@@ -18,30 +19,60 @@ import {
  */
 const MIN_INTERVAL = 60 * 60 * 1000
 
-/** Why switching the check on did not work, or `null` when it did. */
-export type TEnableError = 'unsupported' | 'noPermission' | 'refused' | 'noToken'
+/** Why switching the check on did not work at all. */
+export type TEnableError = 'unsupported' | 'noPermission' | 'noToken'
 
-type TStatus = 'loading' | 'unsupported' | 'off' | 'on'
+export type TEnableResult = {
+  error: TEnableError | null
+  /** Whether Chrome agreed to wake the application while it is closed. */
+  periodic: boolean
+  /** What Chrome answered, verbatim, when it did not. */
+  periodicReason: string
+}
 
-async function getPeriodicSync() {
+type TStatus = 'loading' | 'off' | 'on'
+
+async function getRegistration() {
   if (!('serviceWorker' in navigator)) return null
-  const registration = await navigator.serviceWorker.ready
-  return registration.periodicSync ?? null
+  return navigator.serviceWorker.ready
+}
+
+/**
+ * What Chrome actually thinks, rather than what we guess it thinks. Periodic
+ * background sync is granted silently, on conditions the browser does not
+ * explain, so every answer it does give is worth showing.
+ */
+async function describePeriodicRefusal(error?: unknown) {
+  const installed = window.matchMedia('(display-mode: standalone)').matches
+  let permission = 'неизвестно'
+  try {
+    const status = await navigator.permissions.query({
+      name: 'periodic-background-sync' as PermissionName,
+    })
+    permission = status.state
+  } catch {
+    permission = 'браузер не знает такого разрешения'
+  }
+  const reason =
+    error instanceof Error ? `${error.name}: ${error.message}` : 'нет API'
+  return `запущено как приложение: ${installed ? 'да' : 'нет'} · разрешение: ${permission} · ${reason}`
 }
 
 export function useBackgroundCheck() {
   const token = useAppSelector(getToken)
   const lastSyncTime = useAppSelector(getLastSyncTime)
   const [status, setStatus] = useState<TStatus>('loading')
+  const [periodic, setPeriodic] = useState(false)
 
   const refresh = useCallback(async () => {
-    const periodicSync = await getPeriodicSync()
-    if (!periodicSync) return setStatus('unsupported')
+    const state = await readBackgroundState()
+    setStatus(state?.token ? 'on' : 'off')
+    const registration = await getRegistration()
     try {
-      const tags = await periodicSync.getTags()
-      setStatus(tags.includes(CHECK_TAG) ? 'on' : 'off')
+      const tags = (await registration?.periodicSync?.getTags()) || []
+      setPeriodic(tags.includes(CHECK_TAG))
     } catch {
-      setStatus('unsupported')
+      setPeriodic(false)
     }
   }, [])
 
@@ -49,15 +80,24 @@ export function useBackgroundCheck() {
     refresh()
   }, [refresh])
 
-  const enable = useCallback(async (): Promise<TEnableError | null> => {
-    if (!token) return 'noToken'
-    if (!('Notification' in window)) return 'unsupported'
+  /**
+   * Switching the check on no longer depends on Chrome agreeing to wake the
+   * application in the background. Notifications and a stored token are all it
+   * takes; periodic wake-ups are asked for on top, and their refusal costs
+   * nothing but reach.
+   */
+  const enable = useCallback(async (): Promise<TEnableResult> => {
+    const refuse = (error: TEnableError): TEnableResult => ({
+      error,
+      periodic: false,
+      periodicReason: '',
+    })
+    if (!token) return refuse('noToken')
+    if (!('Notification' in window)) return refuse('unsupported')
     // Chrome wants this asked from a user gesture, which the menu item is.
     if ((await Notification.requestPermission()) !== 'granted') {
-      return 'noPermission'
+      return refuse('noPermission')
     }
-    const periodicSync = await getPeriodicSync()
-    if (!periodicSync) return 'unsupported'
 
     /*
       The cursor starts where the application has already synced to, so the
@@ -71,44 +111,53 @@ export function useBackgroundCheck() {
       serverTimestamp: Math.floor(lastSyncTime / 1000),
     })
 
-    try {
-      await periodicSync.register(CHECK_TAG, { minInterval: MIN_INTERVAL })
-    } catch (error) {
-      // Chrome refuses until the application is installed and used enough.
-      console.warn('Periodic sync refused', error)
-      await clearBackgroundState()
-      return 'refused'
+    let periodicGranted = false
+    let periodicReason = ''
+    const periodicSync = (await getRegistration())?.periodicSync
+    if (!periodicSync) {
+      periodicReason = await describePeriodicRefusal()
+    } else {
+      try {
+        await periodicSync.register(CHECK_TAG, { minInterval: MIN_INTERVAL })
+        periodicGranted = true
+      } catch (error) {
+        periodicReason = await describePeriodicRefusal(error)
+      }
     }
+
     await refresh()
-    return null
+    return { error: null, periodic: periodicGranted, periodicReason }
   }, [token, lastSyncTime, refresh])
 
   const disable = useCallback(async () => {
-    const periodicSync = await getPeriodicSync()
+    const periodicSync = (await getRegistration())?.periodicSync
     await periodicSync?.unregister(CHECK_TAG).catch(() => {})
     await clearBackgroundState()
     await refresh()
   }, [refresh])
 
-  /**
-   * Runs the same routine at once — waiting half a day to test is no fun. The
-   * worker answers over a private channel, so the result is visible even where
-   * notifications are switched off.
-   */
-  const runNow = useCallback(async (): Promise<TCheckReport | null> => {
-    if (!('serviceWorker' in navigator)) return null
-    const worker = (await navigator.serviceWorker.ready).active
-    if (!worker) return null
+  return { status, periodic, enable, disable, runNow, refresh }
+}
 
-    const channel = new MessageChannel()
-    const answer = new Promise<TCheckReport | null>(resolve => {
-      channel.port1.onmessage = event => resolve(event.data as TCheckReport)
-      // A silent worker should not leave the menu waiting for ever.
-      setTimeout(() => resolve(null), 30_000)
-    })
-    worker.postMessage({ type: RUN_CHECK_MESSAGE }, [channel.port2])
-    return answer
-  }, [])
+/**
+ * Asks the worker to run the check. It answers over a private channel, so the
+ * result is visible even where notifications are switched off.
+ */
+export async function runNow(
+  trigger: TRunCheckMessage['trigger'] = 'manual',
+  quiet = false
+): Promise<TCheckReport | null> {
+  if (!('serviceWorker' in navigator)) return null
+  const worker = (await navigator.serviceWorker.ready).active
+  if (!worker) return null
 
-  return { status, enable, disable, runNow }
+  const channel = new MessageChannel()
+  const answer = new Promise<TCheckReport | null>(resolve => {
+    channel.port1.onmessage = event => resolve(event.data as TCheckReport)
+    // A silent worker should not leave the menu waiting for ever.
+    setTimeout(() => resolve(null), 30_000)
+  })
+  const message: TRunCheckMessage = { type: RUN_CHECK_MESSAGE, trigger, quiet }
+  worker.postMessage(message, [channel.port2])
+  return answer
 }

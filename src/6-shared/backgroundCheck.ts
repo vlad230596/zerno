@@ -18,6 +18,17 @@ export const RUN_CHECK_MESSAGE = 'zerno-run-background-check'
 /** What the worker found, sent straight back to the page that asked. */
 export type TCheckReport = { title: string; body: string }
 
+export type TRunCheckMessage = {
+  type: typeof RUN_CHECK_MESSAGE
+  /** Where the request came from; only changes the wording of the report. */
+  trigger: 'manual' | 'foreground'
+  /**
+   * Report only when there is spending to report. The application polls while
+   * it is open, and "nothing happened" every quarter of an hour is not news.
+   */
+  quiet?: boolean
+}
+
 const DB_NAME = 'zerno_background'
 const STORE_NAME = 'state'
 const STATE_KEY = 'state'
@@ -78,6 +89,16 @@ export async function clearBackgroundState() {
 /* ---------------------------------------------------------------- reporting */
 
 /**
+ * Picks out real spending: an expense takes money out and brings none in,
+ * while a transfer does both.
+ */
+export function selectExpenses(transactions: TZmTransaction[] = []) {
+  return transactions.filter(
+    tr => !tr.deleted && tr.income === 0 && tr.outcome > 0
+  )
+}
+
+/**
  * Adds up what was spent, split by currency — no exchange rates are needed that
  * way, and a single-currency user just sees one number.
  *
@@ -88,10 +109,7 @@ export function summarizeSpending(
   transactions: TZmTransaction[] = [],
   symbols: Map<number, string> = new Map()
 ) {
-  // An expense takes money out and brings none in; a transfer does both.
-  const expenses = transactions.filter(
-    tr => !tr.deleted && tr.income === 0 && tr.outcome > 0
-  )
+  const expenses = selectExpenses(transactions)
   if (!expenses.length) return 'новых трат нет'
 
   const byInstrument = new Map<number, number>()

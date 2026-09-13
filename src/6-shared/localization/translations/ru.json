@@ -471,14 +471,17 @@
     "settings": "Настройки",
     "installApp": "Установить приложение",
     "backgroundCheck": "Фоновая проверка (тест)",
-    "backgroundCheckDescription": "Chrome изредка будит приложение, оно считает траты за прошедший период и присылает уведомление",
+    "backgroundCheckDescription": "Считает траты за прошедший период и присылает уведомление",
+    "backgroundCheckReachBackground": "Работает и в фоне: Chrome разрешил будить приложение",
+    "backgroundCheckReachForeground": "Работает, пока приложение запущено. Фоновые побудки Chrome не дал",
+    "backgroundCheckOn": "Включено. Chrome будет будить приложение и в фоне",
+    "backgroundCheckForegroundOnly": "Включено, но только пока приложение запущено. Chrome ответил: {{reason}}",
     "backgroundCheckNow": "Проверить сейчас",
     "backgroundCheckNoAnswer": "Воркер не ответил — попробуйте перезагрузить страницу",
     "backgroundCheckError": {
       "unsupported": "Браузер не умеет будить приложение в фоне",
       "noPermission": "Без разрешения на уведомления проверка бесполезна",
-      "refused": "Chrome пока отказывает. Установите приложение и попользуйтесь им пару дней",
-      "noToken": "Сначала войдите в Дзен-мани"
+        "noToken": "Сначала войдите в Дзен-мани"
     },
     "language": "Язык",
     "advancedSettings": "Расширенные настройки...",
