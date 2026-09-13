@@ -305,7 +305,7 @@ function AutoSyncItem() {
 function BackgroundCheckItem() {
   const { t } = useTranslation('settings')
   const setSnackbar = useSnackbar()
-  const { status, periodic, enable, disable } = useBackgroundCheck()
+  const { status, periodic, enable, disable, diagnose } = useBackgroundCheck()
 
   if (status === 'loading') return null
 
@@ -363,6 +363,25 @@ function BackgroundCheckItem() {
         >
           <ListItemIcon />
           <ListItemText>{t('backgroundCheckNow')}</ListItemText>
+        </MenuItem>
+      )}
+
+      {status === 'on' && !periodic && (
+        <MenuItem
+          onClick={async () => {
+            sendEvent('Settings: background check diagnose')
+            const attempt = await diagnose()
+            // Copied, because this line is only useful once it is passed on.
+            await navigator.clipboard?.writeText(attempt.reason).catch(() => {})
+            setSnackbar({
+              message: attempt.granted
+                ? t('backgroundCheckOn')
+                : t('backgroundCheckWhyNot', { reason: attempt.reason }),
+            })
+          }}
+        >
+          <ListItemIcon />
+          <ListItemText>{t('backgroundCheckDiagnose')}</ListItemText>
         </MenuItem>
       )}
     </>

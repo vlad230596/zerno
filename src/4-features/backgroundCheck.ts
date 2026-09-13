@@ -42,7 +42,7 @@ async function getRegistration() {
  * background sync is granted silently, on conditions the browser does not
  * explain, so every answer it does give is worth showing.
  */
-async function describePeriodicRefusal(error?: unknown) {
+async function describePeriodic(error?: unknown) {
   const installed = window.matchMedia('(display-mode: standalone)').matches
   let permission = 'неизвестно'
   try {
@@ -53,9 +53,32 @@ async function describePeriodicRefusal(error?: unknown) {
   } catch {
     permission = 'браузер не знает такого разрешения'
   }
-  const reason =
-    error instanceof Error ? `${error.name}: ${error.message}` : 'нет API'
-  return `запущено как приложение: ${installed ? 'да' : 'нет'} · разрешение: ${permission} · ${reason}`
+  const outcome = !error
+    ? 'разрешено'
+    : error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : 'нет API'
+  return `приложение: ${installed ? 'да' : 'нет'} · разрешение: ${permission} · ответ: ${outcome}`
+}
+
+export type TPeriodicAttempt = { granted: boolean; reason: string }
+
+/**
+ * Asks Chrome, once more, to wake the application while it is closed.
+ *
+ * Worth asking again on every start: the permission is decided on conditions
+ * that change as the application gets used, and a refusal today says nothing
+ * about tomorrow. Registration is idempotent, so repeating it is free.
+ */
+export async function tryRegisterPeriodic(): Promise<TPeriodicAttempt> {
+  const periodicSync = (await getRegistration())?.periodicSync
+  if (!periodicSync) return { granted: false, reason: await describePeriodic() }
+  try {
+    await periodicSync.register(CHECK_TAG, { minInterval: MIN_INTERVAL })
+    return { granted: true, reason: await describePeriodic() }
+  } catch (error) {
+    return { granted: false, reason: await describePeriodic(error) }
+  }
 }
 
 export function useBackgroundCheck() {
@@ -111,22 +134,13 @@ export function useBackgroundCheck() {
       serverTimestamp: Math.floor(lastSyncTime / 1000),
     })
 
-    let periodicGranted = false
-    let periodicReason = ''
-    const periodicSync = (await getRegistration())?.periodicSync
-    if (!periodicSync) {
-      periodicReason = await describePeriodicRefusal()
-    } else {
-      try {
-        await periodicSync.register(CHECK_TAG, { minInterval: MIN_INTERVAL })
-        periodicGranted = true
-      } catch (error) {
-        periodicReason = await describePeriodicRefusal(error)
-      }
-    }
-
+    const attempt = await tryRegisterPeriodic()
     await refresh()
-    return { error: null, periodic: periodicGranted, periodicReason }
+    return {
+      error: null,
+      periodic: attempt.granted,
+      periodicReason: attempt.reason,
+    }
   }, [token, lastSyncTime, refresh])
 
   const disable = useCallback(async () => {
@@ -136,7 +150,14 @@ export function useBackgroundCheck() {
     await refresh()
   }, [refresh])
 
-  return { status, periodic, enable, disable, runNow, refresh }
+  /** Re-asks Chrome and reports the answer, for when the switch says no. */
+  const diagnose = useCallback(async () => {
+    const attempt = await tryRegisterPeriodic()
+    await refresh()
+    return attempt
+  }, [refresh])
+
+  return { status, periodic, enable, disable, diagnose, runNow, refresh }
 }
 
 /**

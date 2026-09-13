@@ -2,7 +2,7 @@ import { FC, useEffect } from 'react'
 import { useAppSelector } from 'store'
 import { getLoginState } from 'store/token'
 import { readBackgroundState } from '6-shared/backgroundCheck'
-import { runNow } from '4-features/backgroundCheck'
+import { runNow, tryRegisterPeriodic } from '4-features/backgroundCheck'
 
 /**
  * How often the check runs while the application is alive. Chrome may never
@@ -28,6 +28,19 @@ export const BackgroundCheckHandler: FC<{}> = () => {
       if (cancelled || !state?.token) return
       await runNow('foreground', true)
     }
+
+    /*
+      Chrome decides whether to wake a closed application on conditions it does
+      not explain, and re-decides as the application gets used. Asking once,
+      when the switch was flipped, would mean a refusal that day became
+      permanent — so every start asks again, quietly.
+    */
+    const askForBackgroundWakeups = async () => {
+      const state = await readBackgroundState()
+      if (cancelled || !state?.token) return
+      await tryRegisterPeriodic()
+    }
+    askForBackgroundWakeups()
 
     const timer = setInterval(check, FOREGROUND_INTERVAL)
     return () => {

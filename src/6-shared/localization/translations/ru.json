@@ -477,6 +477,8 @@
     "backgroundCheckOn": "Включено. Chrome будет будить приложение и в фоне",
     "backgroundCheckForegroundOnly": "Включено, но только пока приложение запущено. Chrome ответил: {{reason}}",
     "backgroundCheckNow": "Проверить сейчас",
+    "backgroundCheckDiagnose": "Почему нет фоновых уведомлений",
+    "backgroundCheckWhyNot": "Chrome снова отказал и скопировал ответ в буфер: {{reason}}",
     "backgroundCheckNoAnswer": "Воркер не ответил — попробуйте перезагрузить страницу",
     "backgroundCheckError": {
       "unsupported": "Браузер не умеет будить приложение в фоне",

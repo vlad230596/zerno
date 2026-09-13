@@ -505,6 +505,9 @@ export const en: typeof ru = {
     backgroundCheckForegroundOnly:
       'On, but only while the app is running. Chrome answered: {{reason}}',
     backgroundCheckNow: 'Check now',
+    backgroundCheckDiagnose: 'Why are there no background notifications',
+    backgroundCheckWhyNot:
+      'Chrome refused again and copied its answer to the clipboard: {{reason}}',
     backgroundCheckNoAnswer:
       'The worker did not answer — try reloading the page',
     backgroundCheckError: {
