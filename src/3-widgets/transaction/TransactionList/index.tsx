@@ -39,7 +39,8 @@ import Actions from './TopBar/Actions'
 import { Transaction } from './Transaction'
 import { CompositeRow } from './Composite/CompositeRow'
 import { getCompositeTags, useOperations } from './operations'
-import { CompositeEditor } from '4-features/compositeEditor'
+import { CompositeEditor, CompositePicker } from '4-features/compositeEditor'
+import { CollectingBar } from './Composite/CollectingBar'
 import { useTrContextMenu } from '3-widgets/global/TrContextMenu'
 import { useAppDispatch } from 'store'
 
@@ -199,6 +200,33 @@ export const TransactionList: FC<TTransactionListProps> = props => {
     setChecked([])
   }, [checked])
 
+  // Collecting: the list stays exactly where it is and every row grows a "+".
+  // The operations of one event are usually far apart, so what has to be cheap
+  // is not choosing the event but keeping your place in the list.
+  const [collecting, setCollecting] = useState<string | null>(null)
+  const composites = compositeModel.useComposites()
+  const collected = collecting ? composites[collecting] : undefined
+  const attach = useCallback(
+    (ids: TTransactionId[]) => {
+      if (!collecting) return
+      dispatch(compositeModel.attachTransactions(collecting, ids))
+    },
+    [dispatch, collecting]
+  )
+  const addOne = useCallback((id: TTransactionId) => attach([id]), [attach])
+
+  // Picking an event to drop operations into, when not collecting
+  const [picking, setPicking] = useState<TTransactionId[] | null>(null)
+  const pickFor = useCallback((ids: TTransactionId[]) => setPicking(ids), [])
+  const onPicked = useCallback(
+    (compositeId: string) => {
+      if (picking) dispatch(compositeModel.attachTransactions(compositeId, picking))
+      setPicking(null)
+      setChecked([])
+    },
+    [dispatch, picking]
+  )
+
   const renderTransaction = useCallback(
     (tr: TTransaction) => (
       <Transaction
@@ -214,9 +242,16 @@ export const TransactionList: FC<TTransactionListProps> = props => {
         onPayeeClick={hideFilter ? undefined : onFilterByPayee}
         onTagClick={hideFilter ? undefined : onFilterByTag}
         onAccountClick={hideFilter ? undefined : onFilterByAccount}
+        onAdd={collecting ? addOne : undefined}
         onContextMenu={(e, id) =>
           openContextMenu(
-            { id, onSelectSimilar, onMarkOlderViewed },
+            {
+              id,
+              onSelectSimilar,
+              onMarkOlderViewed,
+              onCompose: () => setEditing({ trIds: [id] }),
+              onAttach: () => pickFor([id]),
+            },
             getEventPosition(e)
           )
         }
@@ -235,6 +270,9 @@ export const TransactionList: FC<TTransactionListProps> = props => {
       openContextMenu,
       onSelectSimilar,
       onMarkOlderViewed,
+      collecting,
+      addOne,
+      pickFor,
     ]
   )
 
@@ -256,12 +294,27 @@ export const TransactionList: FC<TTransactionListProps> = props => {
                 compositeId: op.id,
               })
             }
+            // Pulling one event into another: its operations move over
+            onAdd={
+              collecting && collecting !== op.id
+                ? () => attach(op.transactions.map(tr => tr.id))
+                : undefined
+            }
           />
           {isExpanded && op.transactions.map(renderTransaction)}
         </React.Fragment>
       )
     })
-  }, [operations, expanded, isFlat, toggleExpanded, renderTransaction, debtId])
+  }, [
+    operations,
+    expanded,
+    isFlat,
+    toggleExpanded,
+    renderTransaction,
+    debtId,
+    collecting,
+    attach,
+  ])
 
   const groups = useMemo(() => {
     if (isFlat) return []
@@ -323,11 +376,21 @@ export const TransactionList: FC<TTransactionListProps> = props => {
         )}
 
         <Actions
-          visible={Boolean(checked?.length)}
+          visible={Boolean(checked?.length) && !collecting}
           checkedIds={checked}
           onUncheckAll={uncheckAll}
           onCheckAll={checkAll}
           onCompose={composeChecked}
+          onAddToExisting={() => pickFor(checked)}
+        />
+
+        <CollectingBar
+          composite={collected}
+          onOpen={() =>
+            collected &&
+            setEditing({ trIds: collected.trIds, compositeId: collected.id })
+          }
+          onDone={() => setCollecting(null)}
         />
 
         {editing && (
@@ -337,8 +400,15 @@ export const TransactionList: FC<TTransactionListProps> = props => {
             trIds={editing.trIds}
             compositeId={editing.compositeId}
             onClose={closeEditor}
+            onCollect={setCollecting}
           />
         )}
+
+        <CompositePicker
+          open={!!picking}
+          onClose={() => setPicking(null)}
+          onPick={onPicked}
+        />
 
         <Box sx={{ flex: '1 1 auto', minHeight: 120 }}>
           {!elements.length && <EmptyState />}

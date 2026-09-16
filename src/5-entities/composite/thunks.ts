@@ -22,11 +22,14 @@ export type TCompositeDraft = {
   id?: TCompositeId
   date?: TComposite['date']
   title?: string
+  tag?: TComposite['tag']
   trIds: TTransactionId[]
   lines: TCompositeLine[]
 }
 
-export const makeLine = (line: Partial<TCompositeLine> = {}): TCompositeLine => ({
+export const makeLine = (
+  line: Partial<TCompositeLine> = {}
+): TCompositeLine => ({
   id: line.id || uuidv1(),
   amount: line.amount ?? 0,
   tag: line.tag ?? null,
@@ -62,6 +65,7 @@ export const saveComposite =
       id: draft.id || uuidv1(),
       date,
       title: draft.title,
+      tag: draft.tag !== undefined ? draft.tag : main?.tag?.[0] ?? null,
       fx,
       trIds: draft.trIds,
       lines: draft.lines,
@@ -76,7 +80,9 @@ export const saveComposite =
     if (!dispatch(assertReadable(touched))) return
 
     if (oldMonth && oldMonth !== month) {
-      dispatch(writeMonth(oldMonth, list => list.filter(c => c.id !== composite.id)))
+      dispatch(
+        writeMonth(oldMonth, list => list.filter(c => c.id !== composite.id))
+      )
     }
     dispatch(
       writeMonth(month, list => [
@@ -89,6 +95,74 @@ export const saveComposite =
     return composite.id
   }
 
+/**
+ * Adds operations to an event.
+ *
+ * Nothing else has to be adjusted: the remainder absorbs whatever came in,
+ * which is what makes collecting an event one operation at a time possible.
+ * The date can move — attaching a bigger spend re-dates the event to it.
+ */
+export const attachTransactions =
+  (compositeId: TCompositeId, trIds: TTransactionId[]): AppThunk<void> =>
+  (dispatch, getState) => {
+    const state = getState()
+    const composite = getComposites(state)[compositeId]
+    if (!composite) return
+    const byTr = getCompositeIdByTr(state)
+    // An operation belongs to one event at a time
+    const moving = trIds.filter(id => byTr[id] !== compositeId)
+    dispatch(detachTransactions(moving.filter(id => byTr[id])))
+
+    const next = [...new Set([...composite.trIds, ...trIds])]
+    if (next.length === composite.trIds.length) return
+    dispatch(
+      saveComposite({
+        id: compositeId,
+        title: composite.title,
+        tag: composite.tag,
+        trIds: next,
+        lines: composite.lines,
+      })
+    )
+    sendEvent('Composite: attach')
+  }
+
+/**
+ * Takes operations out of whatever event they were in.
+ *
+ * An event with nothing left in it is deleted: it has no date, no currency and
+ * nothing to show.
+ */
+export const detachTransactions =
+  (trIds: TTransactionId[]): AppThunk<void> =>
+  (dispatch, getState) => {
+    if (!trIds.length) return
+    const state = getState()
+    const composites = getComposites(state)
+    const byTr = getCompositeIdByTr(state)
+    const affected = new Set(trIds.map(id => byTr[id]).filter(Boolean))
+
+    affected.forEach(compositeId => {
+      const composite = composites[compositeId]
+      const rest = composite.trIds.filter(id => !trIds.includes(id))
+      if (!rest.length) {
+        dispatch(deleteComposite(compositeId))
+        return
+      }
+      dispatch(
+        saveComposite({
+          id: compositeId,
+          date: composite.date,
+          title: composite.title,
+          tag: composite.tag,
+          trIds: rest,
+          lines: composite.lines,
+        })
+      )
+    })
+    sendEvent('Composite: detach')
+  }
+
 export const deleteComposite =
   (id: TCompositeId): AppThunk<void> =>
   (dispatch, getState) => {
@@ -98,15 +172,6 @@ export const deleteComposite =
     if (!dispatch(assertReadable([month]))) return
     dispatch(writeMonth(month, list => list.filter(c => c.id !== id)))
     sendEvent('Composite: delete')
-  }
-
-/** Removes whatever composites the given transactions were part of. */
-export const detachTransactions =
-  (trIds: TTransactionId[]): AppThunk<void> =>
-  (dispatch, getState) => {
-    const byTr = getCompositeIdByTr(getState())
-    const ids = new Set(trIds.map(id => byTr[id]).filter(Boolean))
-    ids.forEach(id => dispatch(deleteComposite(id)))
   }
 
 const writeMonth =

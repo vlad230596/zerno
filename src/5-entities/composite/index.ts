@@ -6,13 +6,20 @@ import {
   getComposites,
   getCompositeIdByTr,
   getCompositeMonth,
+  getCompositeNets,
   getCompositeProblems,
+  getNet,
+  getRecentComposites,
+  getRemainder,
   getTrAmount,
   getValidComposites,
   getValidCompositeIdByTr,
+  isOverAllocated,
+  sumLines,
   suggestDate,
 } from './composite'
 import {
+  attachTransactions,
   deleteComposite,
   detachTransactions,
   makeLine,
@@ -34,6 +41,7 @@ export const compositeModel = {
   getCompositeIdByTr,
   getValidCompositeIdByTr,
   getCompositeProblems,
+  getCompositeNets,
 
   // Hooks
   useComposites: () => useAppSelector(getComposites),
@@ -41,18 +49,25 @@ export const compositeModel = {
   useCompositeIdByTr: () => useAppSelector(getCompositeIdByTr),
   useValidCompositeIdByTr: () => useAppSelector(getValidCompositeIdByTr),
   useCompositeProblems: () => useAppSelector(getCompositeProblems),
+  useCompositeNets: () => useAppSelector(getCompositeNets),
+  useRecentComposites: () => useAppSelector(getRecentComposites),
   useBrokenMonths: () => useAppSelector(getBrokenCompositeMonths),
 
   // Helpers
   findProblem,
   findMainTransaction,
   getCompositeMonth,
+  getNet,
+  getRemainder,
   getTrAmount,
+  isOverAllocated,
+  sumLines,
   suggestDate,
   makeLine,
 
   // Thunks
   saveComposite,
-  deleteComposite,
+  attachTransactions,
   detachTransactions,
+  deleteComposite,
 }

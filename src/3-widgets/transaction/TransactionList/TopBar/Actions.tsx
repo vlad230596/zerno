@@ -42,6 +42,8 @@ type ActionsProps = {
   onCheckAll: () => void
   /** Opens the composite editor with the selection */
   onCompose?: () => void
+  /** Puts the selection into an event that already exists */
+  onAddToExisting?: () => void
 }
 
 const Actions: FC<ActionsProps> = ({
@@ -50,6 +52,7 @@ const Actions: FC<ActionsProps> = ({
   onUncheckAll,
   onCheckAll,
   onCompose,
+  onAddToExisting,
 }) => {
   const { t } = useTranslation('transactionActions')
   const dispatch = useAppDispatch()
@@ -210,6 +213,20 @@ const Actions: FC<ActionsProps> = ({
                     primary="Собрать одну операцию"
                     secondary="Не меняет сами операции"
                   />
+                </MenuItem>
+              )}
+
+              {actions.compose && (
+                <MenuItem
+                  onClick={() => {
+                    closeMenu()
+                    onAddToExisting?.()
+                  }}
+                >
+                  <ListItemIcon>
+                    <MergeTypeIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Добавить в составную операцию" />
                 </MenuItem>
               )}
 

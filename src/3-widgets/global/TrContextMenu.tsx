@@ -11,6 +11,10 @@ type TTrMenuProps = {
   id: TTransactionId
   onSelectSimilar?: (changed: TTransaction['changed']) => void
   onMarkOlderViewed?: (id: TTransactionId) => void
+  /** Builds an event out of this one operation */
+  onCompose?: () => void
+  /** Puts this operation into an event that already exists */
+  onAttach?: () => void
 }
 
 const trContext = registerPopover<TTrMenuProps, MenuProps>(
@@ -32,7 +36,8 @@ export const useTrContextMenu = () => {
 export const TrContextMenu: FC = () => {
   const { t } = useTranslation('transactionContextMenu')
   const { displayProps, extraProps } = trContext.useProps()
-  const { id, onSelectSimilar, onMarkOlderViewed } = extraProps
+  const { id, onSelectSimilar, onMarkOlderViewed, onCompose, onAttach } =
+    extraProps
   const dispatch = useAppDispatch()
   const transaction = trModel.useTransactions()[id]
 
@@ -42,6 +47,16 @@ export const TrContextMenu: FC = () => {
   const viewed = trModel.isViewed(transaction)
 
   const options = [
+    {
+      label: 'Собрать составную операцию',
+      condition: editable && !!onCompose,
+      action: () => onCompose?.(),
+    },
+    {
+      label: 'В составную операцию…',
+      condition: editable && !!onAttach,
+      action: () => onAttach?.(),
+    },
     {
       label: t('restore'),
       condition: transaction.deleted,

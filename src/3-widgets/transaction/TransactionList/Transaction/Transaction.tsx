@@ -2,7 +2,8 @@ import type { TTransactionId } from '6-shared/types'
 
 import React, { FC } from 'react'
 import styled from '@emotion/styled'
-import { Theme, TypographyVariant } from '@mui/material'
+import { IconButton, Theme, TypographyVariant } from '@mui/material'
+import { AddIcon } from '6-shared/ui/Icons'
 import { useContextMenu } from '6-shared/hooks/useContextMenu'
 import { trModel } from '5-entities/transaction'
 import { Symbol, Tags, Amounts, Info, Accounts } from './Transaction.Components'
@@ -24,6 +25,8 @@ export type TTransactionProps = {
     event: React.MouseEvent | React.TouchEvent,
     id: TTransactionId
   ) => void
+  /** Adds the operation to the event being collected. One tap, no menus */
+  onAdd?: (id: TTransactionId) => void
 }
 
 export const Transaction: FC<TTransactionProps> = props => {
@@ -39,6 +42,7 @@ export const Transaction: FC<TTransactionProps> = props => {
     onTagClick,
     onAccountClick,
     onContextMenu,
+    onAdd,
   } = props
 
   const propsToPass = useContextMenu({
@@ -68,6 +72,19 @@ export const Transaction: FC<TTransactionProps> = props => {
           <Accounts {...{ tr, trType, onFilterByPayee, onAccountClick }} />
         </SecondaryRow>
       </Content>
+      {onAdd && (
+        <IconButton
+          size="small"
+          color="primary"
+          sx={{ alignSelf: 'center', ml: 1, flexShrink: 0 }}
+          onClick={e => {
+            e.stopPropagation()
+            onAdd(id)
+          }}
+        >
+          <AddIcon />
+        </IconButton>
+      )}
     </Wrapper>
   )
 }

@@ -21,10 +21,10 @@ import { AmountInput } from '6-shared/ui/AmountInput'
 import { Amount } from '6-shared/ui/Amount'
 import { TagIcon } from '6-shared/ui/TagIcon'
 import { formatDate } from '6-shared/helpers/date'
-import { round } from '6-shared/helpers/money'
 import { useAppDispatch } from 'store'
 import { compositeModel } from '5-entities/composite'
 import { instrumentModel } from '5-entities/currency/instrument'
+import { merchantModel } from '5-entities/merchant'
 import { tagModel } from '5-entities/tag'
 import { TagSelect2 } from '5-entities/tag/ui/TagSelect2'
 import { trModel } from '5-entities/transaction'
@@ -35,15 +35,20 @@ export type TCompositeEditorProps = {
   trIds: TTransactionId[]
   compositeId?: TCompositeId
   onClose: () => void
+  /** Closes the editor and starts picking operations in the list */
+  onCollect?: (id: TCompositeId) => void
 }
 
 /**
- * The one editor behind both entry points: several operations merged into one
- * event, and one operation split into parts. Both are the same thing — inputs
- * on top, lines below, and the two must add up.
+ * One event: the operations it is made of, and where its money went.
+ *
+ * The lines are only what was written out by hand. What they did not claim is
+ * the remainder, and it is a row like any other except that its amount is not
+ * typed — it follows from the operations. That is what lets an event be built
+ * up over several days without falling apart between attachments.
  */
 export const CompositeEditor: FC<TCompositeEditorProps> = props => {
-  const { open, trIds, compositeId, onClose } = props
+  const { open, trIds, compositeId, onClose, onCollect } = props
   const dispatch = useAppDispatch()
   // A receipt split across categories is a tall form — on a phone it needs the
   // whole screen, not a card floating in the middle of it
@@ -60,32 +65,22 @@ export const CompositeEditor: FC<TCompositeEditorProps> = props => {
   )
 
   const net = useMemo(
-    () =>
-      transactions.reduce(
-        (sum, tr) =>
-          round(sum + (compositeModel.getTrAmount(tr, instruments)?.amount ?? 0)),
-        0
-      ),
-    [transactions, instruments]
+    () => compositeModel.getNet(inputIds, allTransactions, instruments),
+    [inputIds, allTransactions, instruments]
   )
   const fx = transactions.length
     ? compositeModel.getTrAmount(transactions[0], instruments)?.fx
     : undefined
+  const main = compositeModel.findMainTransaction(transactions)
 
   const [title, setTitle] = useState(existing?.title ?? '')
-  const [lines, setLines] = useState<TCompositeLine[]>(
-    () =>
-      existing?.lines ?? [
-        compositeModel.makeLine({
-          amount: net,
-          tag: compositeModel.findMainTransaction(transactions)?.tag?.[0] ?? null,
-        }),
-      ]
+  const [tag, setTag] = useState<string | null>(
+    existing ? existing.tag : main?.tag?.[0] ?? null
   )
+  const [lines, setLines] = useState<TCompositeLine[]>(existing?.lines ?? [])
 
-  const spread = lines.reduce((sum, line) => round(sum + line.amount), 0)
-  const rest = round(net - spread)
-  const canSave = !!lines.length && rest === 0 && !!transactions.length
+  const remainder = compositeModel.getRemainder(net, lines)
+  const overAllocated = compositeModel.isOverAllocated(net, lines)
 
   const patchLine = (id: string, patch: Partial<TCompositeLine>) =>
     setLines(current =>
@@ -94,21 +89,38 @@ export const CompositeEditor: FC<TCompositeEditorProps> = props => {
   const addLine = () =>
     setLines(current => [
       ...current,
-      compositeModel.makeLine({ amount: rest, tag: null }),
+      compositeModel.makeLine({ amount: remainder, tag: null }),
     ])
   const removeLine = (id: string) =>
     setLines(current => current.filter(line => line.id !== id))
 
-  const handleSave = () => {
+  const save = (): TCompositeId | void =>
     dispatch(
       compositeModel.saveComposite({
         id: compositeId,
         title: title.trim() || undefined,
+        tag,
         trIds: inputIds,
         lines,
       })
     )
+
+  const handleSave = () => {
+    save()
     onClose()
+  }
+
+  /** A new event has to exist before operations can be added to it */
+  const handleCollect = () => {
+    const id = compositeId ?? save()
+    if (id) onCollect?.(id)
+    onClose()
+  }
+
+  const handleDetach = (id: TTransactionId) => {
+    if (!compositeId) return
+    dispatch(compositeModel.detachTransactions([id]))
+    if (inputIds.length <= 1) onClose()
   }
 
   const handleDelete = () => {
@@ -132,10 +144,7 @@ export const CompositeEditor: FC<TCompositeEditorProps> = props => {
         <Stack spacing={2}>
           <TextField
             label="Название"
-            placeholder={
-              compositeModel.findMainTransaction(transactions)?.payee ??
-              'Операция'
-            }
+            placeholder={main?.payee ?? 'Операция'}
             value={title}
             onChange={e => setTitle(e.target.value)}
             size="small"
@@ -148,9 +157,25 @@ export const CompositeEditor: FC<TCompositeEditorProps> = props => {
             </Typography>
             <Stack spacing={0.5} sx={{ mt: 0.5 }}>
               {transactions.map(tr => (
-                <InputRow key={tr.id} tr={tr} />
+                <InputRow
+                  key={tr.id}
+                  tr={tr}
+                  onDetach={
+                    compositeId && transactions.length > 1
+                      ? () => handleDetach(tr.id)
+                      : undefined
+                  }
+                />
               ))}
             </Stack>
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={handleCollect}
+              sx={{ mt: 1 }}
+            >
+              Добавить операции
+            </Button>
           </Box>
 
           <Box>
@@ -161,14 +186,23 @@ export const CompositeEditor: FC<TCompositeEditorProps> = props => {
               {lines.map(line => (
                 <LineRow
                   key={line.id}
-                  line={line}
+                  tag={line.tag}
+                  name={line.name}
+                  amount={line.amount}
                   currency={fx}
                   onChange={patch => patchLine(line.id, patch)}
-                  onRemove={
-                    lines.length > 1 ? () => removeLine(line.id) : undefined
-                  }
+                  onRemove={() => removeLine(line.id)}
                 />
               ))}
+              <LineRow
+                tag={tag}
+                amount={remainder}
+                currency={fx}
+                isRemainder
+                onChange={patch => {
+                  if (patch.tag !== undefined) setTag(patch.tag)
+                }}
+              />
             </Stack>
             <Button
               size="small"
@@ -176,32 +210,25 @@ export const CompositeEditor: FC<TCompositeEditorProps> = props => {
               onClick={addLine}
               sx={{ mt: 1 }}
             >
-              Добавить строку
+              Разнести часть
             </Button>
           </Box>
 
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              p: 1.5,
-              borderRadius: 1,
-              bgcolor: rest === 0 ? 'action.hover' : 'warning.main',
-              color: rest === 0 ? 'text.primary' : 'warning.contrastText',
-            }}
-          >
-            <Typography variant="body2">
-              {rest === 0 ? 'Сходится' : 'Не разложено'}
-            </Typography>
-            <Typography variant="body2">
-              {rest === 0 ? (
-                <Amount value={net} currency={fx} />
-              ) : (
-                <Amount value={rest} currency={fx} />
-              )}
-            </Typography>
-          </Box>
+          {overAllocated && (
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
+                bgcolor: 'warning.main',
+                color: 'warning.contrastText',
+              }}
+            >
+              <Typography variant="body2">
+                Разнесено больше, чем есть в операции — на{' '}
+                <Amount value={Math.abs(remainder)} currency={fx} sign={false} />
+              </Typography>
+            </Box>
+          )}
         </Stack>
       </DialogContent>
 
@@ -212,7 +239,11 @@ export const CompositeEditor: FC<TCompositeEditorProps> = props => {
           </Button>
         )}
         <Button onClick={onClose}>Отмена</Button>
-        <Button variant="contained" disabled={!canSave} onClick={handleSave}>
+        <Button
+          variant="contained"
+          disabled={overAllocated || !transactions.length}
+          onClick={handleSave}
+        >
           Сохранить
         </Button>
       </DialogActions>
@@ -220,57 +251,73 @@ export const CompositeEditor: FC<TCompositeEditorProps> = props => {
   )
 }
 
-const InputRow: FC<{ tr: TTransaction }> = ({ tr }) => {
+const InputRow: FC<{ tr: TTransaction; onDetach?: () => void }> = props => {
+  const { tr, onDetach } = props
   const instruments = instrumentModel.useInstruments()
+  const merchants = merchantModel.useMerchants()
   const amount = compositeModel.getTrAmount(tr, instruments)
+  // A row with nothing but a date and an amount is not identifiable, and the
+  // merchant is often the only name a synced operation has
+  const name =
+    (tr.merchant && merchants[tr.merchant]?.title) ||
+    tr.payee ||
+    tr.comment ||
+    '—'
   return (
     <Box
       sx={{
         display: 'flex',
         gap: 1,
-        alignItems: 'baseline',
+        alignItems: 'center',
         color: 'text.secondary',
       }}
     >
-      <Typography variant="body2" sx={{ minWidth: 88 }}>
+      <Typography variant="body2" sx={{ flexShrink: 0 }}>
         {formatDate(tr.date)}
       </Typography>
       <Typography variant="body2" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
-        {tr.payee || '—'}
+        {name}
       </Typography>
-      <Typography variant="body2">
+      <Typography variant="body2" sx={{ flexShrink: 0 }}>
         <Amount value={amount?.amount ?? 0} currency={amount?.fx} sign />
       </Typography>
+      <IconButton
+        size="small"
+        onClick={onDetach}
+        disabled={!onDetach}
+        title="Открепить"
+        sx={{ flexShrink: 0, opacity: onDetach ? 1 : 0 }}
+      >
+        <CloseIcon />
+      </IconButton>
     </Box>
   )
 }
 
 const LineRow: FC<{
-  line: TCompositeLine
+  tag: string | null
+  name?: string
+  amount: number
   currency?: string
+  /** The rest of the event: its amount follows from the operations */
+  isRemainder?: boolean
   onChange: (patch: Partial<TCompositeLine>) => void
   onRemove?: () => void
-}> = ({ line, currency, onChange, onRemove }) => {
+}> = props => {
+  const { tag, name, amount, currency, isRemainder, onChange, onRemove } = props
   const tags = tagModel.usePopulatedTags()
-  const tag = tags[line.tag ?? 'null']
+  const populated = tags[tag ?? 'null']
   // On a phone the four controls do not fit side by side, so the name drops to
   // a line of its own and the category takes the width instead
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 1,
-        alignItems: 'center',
-      }}
-    >
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
       <TagSelect2
         onChange={id => onChange({ tag: id === 'null' ? null : id })}
-        value={line.tag ? [line.tag] : null}
+        value={tag ? [tag] : null}
         trigger={
           <Button
             size="small"
-            startIcon={<TagIcon symbol={tag?.symbol ?? '?'} />}
+            startIcon={<TagIcon symbol={populated?.symbol ?? '?'} />}
             sx={{
               order: 1,
               flexGrow: { xs: 1, sm: 0 },
@@ -278,37 +325,72 @@ const LineRow: FC<{
               justifyContent: 'flex-start',
             }}
           >
-            {tag?.title ?? 'Без категории'}
+            {populated?.title ?? 'Без категории'}
           </Button>
         }
       />
-      <AmountInput
-        value={line.amount}
-        currency={currency}
-        onChange={amount => onChange({ amount })}
-        size="small"
-        sx={{ order: { xs: 2, sm: 3 }, width: 128, flexShrink: 0 }}
-      />
+
+      {isRemainder ? (
+        <Box
+          sx={{
+            order: { xs: 2, sm: 3 },
+            width: 128,
+            flexShrink: 0,
+            textAlign: 'right',
+            pr: 1.75,
+          }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            <Amount value={amount} currency={currency} />
+          </Typography>
+        </Box>
+      ) : (
+        <AmountInput
+          value={amount}
+          currency={currency}
+          onChange={value => onChange({ amount: value })}
+          size="small"
+          sx={{ order: { xs: 2, sm: 3 }, width: 128, flexShrink: 0 }}
+        />
+      )}
+
       <IconButton
         size="small"
         onClick={onRemove}
         disabled={!onRemove}
-        sx={{ order: { xs: 3, sm: 4 }, flexShrink: 0 }}
+        sx={{ order: { xs: 3, sm: 4 }, flexShrink: 0, opacity: onRemove ? 1 : 0 }}
       >
-        {onRemove ? <DeleteIcon /> : <CloseIcon sx={{ opacity: 0 }} />}
+        <DeleteIcon />
       </IconButton>
-      <TextField
-        placeholder="Что это"
-        value={line.name ?? ''}
-        onChange={e => onChange({ name: e.target.value || undefined })}
-        size="small"
-        sx={{
-          order: { xs: 4, sm: 2 },
-          flexGrow: 1,
-          flexBasis: { xs: '100%', sm: 0 },
-          minWidth: 80,
-        }}
-      />
+
+      {isRemainder ? (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{
+            order: { xs: 4, sm: 2 },
+            flexGrow: 1,
+            flexBasis: { xs: '100%', sm: 0 },
+            minWidth: 80,
+            pl: { sm: 1 },
+          }}
+        >
+          Остальное
+        </Typography>
+      ) : (
+        <TextField
+          placeholder="Что это"
+          value={name ?? ''}
+          onChange={e => onChange({ name: e.target.value || undefined })}
+          size="small"
+          sx={{
+            order: { xs: 4, sm: 2 },
+            flexGrow: 1,
+            flexBasis: { xs: '100%', sm: 0 },
+            minWidth: 80,
+          }}
+        />
+      )}
     </Box>
   )
 }

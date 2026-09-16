@@ -2,7 +2,6 @@ import type { TISODate, TTagId, TTransaction } from '6-shared/types'
 import type { TComposite } from '5-entities/composite'
 
 import { useMemo } from 'react'
-import { round } from '6-shared/helpers/money'
 import { compositeModel } from '5-entities/composite'
 
 /**
@@ -20,17 +19,18 @@ export type TOperation = {
   composite?: TComposite
 }
 
-/** Categories an event spends into. What the search has to match against. */
+/**
+ * Categories an event spends into. What the search has to match against.
+ *
+ * The remainder counts: an event with no lines at all still belongs to a
+ * category, and that is the common case.
+ */
 export function getCompositeTags(composite: TComposite): TTagId[] | null {
-  const tags = composite.lines
-    .map(line => line.tag)
-    .filter((tag): tag is TTagId => !!tag)
+  const tags = [composite.tag, ...composite.lines.map(line => line.tag)].filter(
+    (tag): tag is TTagId => !!tag
+  )
   const unique = [...new Set(tags)]
   return unique.length ? unique : null
-}
-
-export function getCompositeAmount(composite: TComposite): number {
-  return composite.lines.reduce((sum, line) => round(sum + line.amount), 0)
 }
 
 /**

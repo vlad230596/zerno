@@ -80,14 +80,20 @@ function getRawActivityFn(
     const month = toISOMonth(composite.date)
     const dayIdx = new Date(composite.date).getDate() - 1
     const trs = composite.trIds.map(id => trById[id]).filter(Boolean)
-    composite.lines.forEach(line => {
-      if (!line.amount) return
-      const envId = envelopeModel.makeId(EnvType.Tag, line.tag || 'null')
-      const change = { [composite.fx]: line.amount }
+    const net = compositeModel.getNet(composite.trIds, trById, instruments)
+    const remainder = compositeModel.getRemainder(net, composite.lines)
+    // The remainder is not stored anywhere — it is whatever the hand-written
+    // lines left, and it carries the event's own category
+    const parts = [...composite.lines, { amount: remainder, tag: composite.tag }]
+
+    parts.forEach(part => {
+      if (!part.amount) return
+      const envId = envelopeModel.makeId(EnvType.Tag, part.tag || 'null')
+      const change = { [composite.fx]: part.amount }
       res[month] ??= makeMonthNode()
-      const bucket = line.amount < 0 ? res[month].outcome : res[month].income
+      const bucket = part.amount < 0 ? res[month].outcome : res[month].income
       const node = (bucket[envId] ??= new EnvActivity())
-      // Every line carries the whole event: opening a category should show the
+      // Every part carries the whole event: opening a category should show the
       // operation it came from, even though that lists it under each category.
       node.transactions.push(...trs)
       node.total = addFxAmount(node.total, change)
