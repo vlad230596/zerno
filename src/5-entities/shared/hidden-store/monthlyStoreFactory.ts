@@ -7,13 +7,19 @@ import { TReminder, TISOMonth, ByMonth } from '6-shared/types'
 import { AppThunk, TSelector } from 'store'
 import { deleteReminder, getReminders, setReminder } from '5-entities/reminder'
 import { prepareDataAccount } from './dataAccount'
-import { parseComment } from './helpers'
+import { parseBrokenMonth, parseComment, reportBroken } from './helpers'
 import { HiddenDataType } from './types'
 
 type TMonthlyStore<TPayload> = {
   type: HiddenDataType
   getDataReminders: TSelector<ByMonth<TReminder>>
   getData: TSelector<ByMonth<TPayload>>
+  /**
+   * Months whose reminder is there but cannot be read. Callers that overwrite
+   * what they read should stop on these instead of treating them as empty.
+   */
+  getBrokenMonths: TSelector<TISOMonth[]>
+  getIsBroken: TSelector<boolean>
   setData: (payload: TPayload, month: TISOMonth) => AppThunk<void>
   resetMonth: (month: TISOMonth) => AppThunk<void>
 }
@@ -35,9 +41,40 @@ export function makeMonthlyHiddenStore<TPayload>(
     },
     { memoizeOptions: { resultEqualityCheck: shallowEqual } }
   )
-  const getData: TSelector<ByMonth<TPayload>> = createSelector(
-    [getDataReminders],
+  /** Our reminders that are there, but whose payload did not survive. */
+  const getBrokenReminders: TSelector<ByMonth<TReminder>> = createSelector(
+    [getReminders],
     reminders => {
+      const result: ByMonth<TReminder> = {}
+      Object.values(reminders).forEach(r => {
+        const month = parseBrokenMonth(r.comment, type)
+        if (month) result[month] = r
+      })
+      return result
+    },
+    { memoizeOptions: { resultEqualityCheck: shallowEqual } }
+  )
+
+  const getBrokenMonths: TSelector<TISOMonth[]> = createSelector(
+    [getDataReminders, getBrokenReminders],
+    // A month that also has a readable reminder is not lost: the damaged one is
+    // a leftover, and the good one wins.
+    (reminders, broken) => keys(broken).filter(month => !reminders[month]),
+    { memoizeOptions: { resultEqualityCheck: shallowEqual } }
+  )
+
+  const getIsBroken: TSelector<boolean> = createSelector(
+    [getBrokenMonths],
+    months => months.length > 0
+  )
+
+  const getData: TSelector<ByMonth<TPayload>> = createSelector(
+    [getDataReminders, getBrokenReminders, getBrokenMonths],
+    (reminders, broken, brokenMonths) => {
+      // Losing this silently is how the data disappears for good: the caller
+      // gets an empty month, writes its own state over it, and the damaged
+      // comment is the only copy left.
+      brokenMonths.forEach(month => reportBroken(type, broken[month], month))
       const result: ByMonth<TPayload> = {}
       keys(reminders).forEach(month => {
         const reminder = reminders[month]
@@ -72,6 +109,9 @@ export function makeMonthlyHiddenStore<TPayload>(
 
       const state = getState()
       const dataAccId = dispatch(prepareDataAccount())
+      // Only readable reminders are found here, so a damaged one is left alone
+      // rather than reused: it is the only copy of whatever was in there, and
+      // it can still be read by hand from the reminder's comment.
       const existingReminder = getDataReminders(state)[month]
 
       return dispatch(
@@ -91,6 +131,8 @@ export function makeMonthlyHiddenStore<TPayload>(
     type,
     getDataReminders,
     getData,
+    getBrokenMonths,
+    getIsBroken,
     setData,
     resetMonth,
   }

@@ -9,4 +9,5 @@ export enum HiddenDataType {
   TagOrder = 'tagOrder',
   Rules = 'rules',
   RuleState = 'ruleState',
+  Composites = 'composites',
 }

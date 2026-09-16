@@ -40,6 +40,8 @@ type ActionsProps = {
   checkedIds: string[]
   onUncheckAll: () => void
   onCheckAll: () => void
+  /** Opens the composite editor with the selection */
+  onCompose?: () => void
 }
 
 const Actions: FC<ActionsProps> = ({
@@ -47,6 +49,7 @@ const Actions: FC<ActionsProps> = ({
   checkedIds,
   onUncheckAll,
   onCheckAll,
+  onCompose,
 }) => {
   const { t } = useTranslation('transactionActions')
   const dispatch = useAppDispatch()
@@ -193,6 +196,23 @@ const Actions: FC<ActionsProps> = ({
                 </MenuItem>
               )}
 
+              {actions.compose && (
+                <MenuItem
+                  onClick={() => {
+                    closeMenu()
+                    onCompose?.()
+                  }}
+                >
+                  <ListItemIcon>
+                    <MergeTypeIcon />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Собрать одну операцию"
+                    secondary="Не меняет сами операции"
+                  />
+                </MenuItem>
+              )}
+
               {actions.combineToOutcome && (
                 <MenuItem
                   onClick={() => {
@@ -315,6 +335,9 @@ function getAvailableActions(transactions: TTransaction[]) {
 
   return {
     delete: true,
+    // A composite only speaks for plain spending and income: transfers are
+    // already left out of the budget, and debts are a separate mechanism
+    compose: !transfers.length && !!(incomes.length || outcomes.length),
     setMainTag: !transfers.length && (incomes.length || outcomes.length),
     bulkEdit: true,
     markViewed: transactions.some(tr => !trModel.isViewed(tr)),

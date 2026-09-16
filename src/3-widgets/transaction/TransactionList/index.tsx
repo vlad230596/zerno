@@ -14,6 +14,7 @@ import { Box, Typography, Theme } from '@mui/material'
 import { sendEvent } from '6-shared/helpers/tracking'
 import { useDebounce } from '6-shared/hooks/useDebounce'
 import { accountModel } from '5-entities/account'
+import { compositeModel, TComposite } from '5-entities/composite'
 import { trModel } from '5-entities/transaction'
 import { userSettingsModel } from '5-entities/userSettings'
 import {
@@ -36,8 +37,20 @@ import { SearchBar } from './TopBar/SearchBar'
 import { TrStats } from './TrStats'
 import Actions from './TopBar/Actions'
 import { Transaction } from './Transaction'
+import { CompositeRow } from './Composite/CompositeRow'
+import { getCompositeTags, useOperations } from './operations'
+import { CompositeEditor } from '4-features/compositeEditor'
 import { useTrContextMenu } from '3-widgets/global/TrContextMenu'
 import { useAppDispatch } from 'store'
+
+type TEditorTarget = { trIds: TTransactionId[]; compositeId?: string }
+
+type TGroupNode = {
+  date: TISODate
+  transactions: JSX.Element[]
+  /** Rows the day takes: an expanded event counts as more than one */
+  rows: number
+}
 
 export type TTransactionListProps = {
   onTrOpen?: (id: TTransactionId) => void
@@ -166,9 +179,28 @@ export const TransactionList: FC<TTransactionListProps> = props => {
 
   const sortedList = useSortedTransactions(trList, sort)
   const isFlat = isAmountSort(sort)
+  // Sorted by amount the list has no date order to keep, so an event stays
+  // where its parts were instead of jumping to its own date
+  const operations = useOperations(sortedList, !isFlat)
 
-  const elements = useMemo(() => {
-    return sortedList.map(tr => (
+  const [expanded, setExpanded] = useState<string[]>([])
+  const toggleExpanded = useCallback((id: string) => {
+    setExpanded(current =>
+      current.includes(id)
+        ? current.filter(openId => openId !== id)
+        : [...current, id]
+    )
+  }, [])
+
+  const [editing, setEditing] = useState<TEditorTarget | null>(null)
+  const closeEditor = useCallback(() => setEditing(null), [])
+  const composeChecked = useCallback(() => {
+    setEditing({ trIds: checked })
+    setChecked([])
+  }, [checked])
+
+  const renderTransaction = useCallback(
+    (tr: TTransaction) => (
       <Transaction
         key={tr.id}
         id={tr.id}
@@ -189,33 +221,62 @@ export const TransactionList: FC<TTransactionListProps> = props => {
           )
         }
       />
-    ))
-  }, [
-    sortedList,
-    debtId,
-    opened,
-    checked,
-    isFlat,
-    hideFilter,
-    onTrOpen,
-    toggleTransaction,
-    onFilterByPayee,
-    onFilterByTag,
-    onFilterByAccount,
-    openContextMenu,
-    onSelectSimilar,
-    onMarkOlderViewed,
-  ])
+    ),
+    [
+      opened,
+      checked,
+      isFlat,
+      hideFilter,
+      onTrOpen,
+      toggleTransaction,
+      onFilterByPayee,
+      onFilterByTag,
+      onFilterByAccount,
+      openContextMenu,
+      onSelectSimilar,
+      onMarkOlderViewed,
+    ]
+  )
+
+  const elements = useMemo(() => {
+    return operations.map(op => {
+      const composite = op.composite
+      if (!composite) return renderTransaction(op.transactions[0])
+      const isExpanded = expanded.includes(op.id)
+      return (
+        <React.Fragment key={op.id}>
+          <CompositeRow
+            composite={composite}
+            partCount={op.transactions.length}
+            isExpanded={isExpanded}
+            onToggleExpand={isFlat ? undefined : () => toggleExpanded(op.id)}
+            onOpen={() =>
+              setEditing({
+                trIds: op.transactions.map(tr => tr.id),
+                compositeId: op.id,
+              })
+            }
+          />
+          {isExpanded && op.transactions.map(renderTransaction)}
+        </React.Fragment>
+      )
+    })
+  }, [operations, expanded, isFlat, toggleExpanded, renderTransaction, debtId])
 
   const groups = useMemo(() => {
     if (isFlat) return []
-    let groups: ByDate<{ date: TISODate; transactions: JSX.Element[] }> = {}
-    sortedList.forEach((tr, i) => {
-      groups[tr.date] ??= { date: tr.date, transactions: [] }
-      groups[tr.date].transactions.push(elements[i])
+    let groups: ByDate<TGroupNode> = {}
+    operations.forEach((op, i) => {
+      groups[op.date] ??= { date: op.date, transactions: [], rows: 0 }
+      groups[op.date].transactions.push(elements[i])
+      // An expanded event is as tall as its header plus its parts
+      groups[op.date].rows +=
+        op.composite && expanded.includes(op.id)
+          ? 1 + op.transactions.length
+          : 1
     })
     return Object.values(groups)
-  }, [isFlat, sortedList, elements])
+  }, [isFlat, operations, elements, expanded])
 
   return (
     <>
@@ -266,7 +327,18 @@ export const TransactionList: FC<TTransactionListProps> = props => {
           checkedIds={checked}
           onUncheckAll={uncheckAll}
           onCheckAll={checkAll}
+          onCompose={composeChecked}
         />
+
+        {editing && (
+          <CompositeEditor
+            key={editing.compositeId || editing.trIds.join()}
+            open
+            trIds={editing.trIds}
+            compositeId={editing.compositeId}
+            onClose={closeEditor}
+          />
+        )}
 
         <Box sx={{ flex: '1 1 auto', minHeight: 120 }}>
           {!elements.length && <EmptyState />}
@@ -286,14 +358,31 @@ function useFilteredTransactions(
 ) {
   const transactionsById = trModel.useTransactions()
   const allTransactionIds = trModel.useSortedTransactionIds()
+  const composites = compositeModel.useValidComposites()
+  const compositeByTr = compositeModel.useValidCompositeIdByTr()
   const groups = useMemo(() => {
     const checker = trModel.checkRaw(conditions)
     const list = trIds || allTransactionIds
+    // A transaction inside an event is searched by the event's categories, not
+    // by the tag still sitting on it. Otherwise the list and the envelopes
+    // would answer `#дети` differently.
+    const check = (tr: TTransaction) => {
+      const composite = composites[compositeByTr[tr.id]]
+      if (!composite) return checker(tr)
+      return checker({ ...tr, tag: getCompositeTags(composite) })
+    }
     return list
       .map(id => transactionsById[id])
-      .filter(checker)
+      .filter(check)
       .sort(trModel.compareTrDates)
-  }, [trIds, allTransactionIds, conditions, transactionsById])
+  }, [
+    trIds,
+    allTransactionIds,
+    conditions,
+    transactionsById,
+    composites,
+    compositeByTr,
+  ])
   return groups
 }
 

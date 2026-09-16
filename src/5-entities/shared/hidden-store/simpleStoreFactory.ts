@@ -1,10 +1,9 @@
 import { createSelector } from '@reduxjs/toolkit'
 import { deleteReminder, getReminders, setReminder } from '5-entities/reminder'
-import { captureError, sendEvent } from '6-shared/helpers/tracking'
 import { TReminder } from '6-shared/types'
 import { AppThunk, TSelector } from 'store'
 import { prepareDataAccount } from './dataAccount'
-import { isBrokenComment, parseComment } from './helpers'
+import { isBrokenComment, parseComment, reportBroken } from './helpers'
 import { HiddenDataType } from './types'
 
 type TSimpleStore<TPayload> = {
@@ -103,16 +102,4 @@ export function makeSimpleHiddenStore<TPayload>(
     setData,
     resetData,
   }
-}
-
-const reported = new Set<HiddenDataType>()
-
-/** Selectors rerun constantly, so each store complains once per session. */
-function reportBroken(type: HiddenDataType, reminder: TReminder) {
-  if (reported.has(type)) return
-  reported.add(type)
-  const message = `Hidden store "${type}" is damaged, reminder ${reminder.id}`
-  console.error(message, reminder.comment)
-  sendEvent(`Error: broken hidden store ${type}`)
-  captureError(new Error(message))
 }

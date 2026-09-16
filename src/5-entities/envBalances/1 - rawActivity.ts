@@ -17,6 +17,7 @@ import { instrumentModel } from '5-entities/currency/instrument'
 import { cleanPayee } from '5-entities/shared/cleanPayee'
 import { trModel, TrType } from '5-entities/transaction'
 import { envelopeModel, EnvType, TEnvelopeId } from '5-entities/envelope'
+import { compositeModel, TComposite } from '5-entities/composite'
 
 export type TRawActivityNode = {
   internal: EnvActivity
@@ -32,6 +33,7 @@ export const getRawActivity: TSelector<ByMonth<TRawActivityNode>> =
       accountModel.getDebtAccountId,
       debtorModel.getDebtors,
       instrumentModel.getInstruments,
+      compositeModel.getValidComposites,
     ],
     withPerf('🖤 getRawActivity', getRawActivityFn)
   )
@@ -41,12 +43,57 @@ function getRawActivityFn(
   inBudgetAccsPop: TAccountPopulated[],
   debtAccId: TAccountId | undefined,
   debtors: ById<TDebtor>,
-  instruments: ById<TInstrument>
+  instruments: ById<TInstrument>,
+  composites: ById<TComposite>
 ) {
   const inBudgetAccs = inBudgetAccsPop.map(acc => acc.id)
   const res: ByMonth<TRawActivityNode> = {}
-  transactions.forEach(addTransaction)
+  const trById: ById<TTransaction> = {}
+  transactions.forEach(tr => (trById[tr.id] = tr))
+
+  // A composite speaks for its transactions: they are left out of the activity
+  // and the composite puts its own lines in instead. Its date is the event's
+  // date, so a purchase and its refund from the next month land together.
+  const applied = Object.values(composites).filter(canApply)
+  const covered = new Set(applied.flatMap(c => c.trIds))
+
+  transactions.forEach(tr => {
+    if (covered.has(tr.id)) return
+    addTransaction(tr)
+  })
+  applied.forEach(addComposite)
   return res
+
+  /** In-budget is decided per transaction, so a composite is all or nothing. */
+  function canApply(composite: TComposite) {
+    return composite.trIds.every(id => {
+      const tr = trById[id]
+      if (!tr) return false
+      return (
+        inBudgetAccs.includes(tr.outcomeAccount) ||
+        inBudgetAccs.includes(tr.incomeAccount)
+      )
+    })
+  }
+
+  function addComposite(composite: TComposite) {
+    const month = toISOMonth(composite.date)
+    const dayIdx = new Date(composite.date).getDate() - 1
+    const trs = composite.trIds.map(id => trById[id]).filter(Boolean)
+    composite.lines.forEach(line => {
+      if (!line.amount) return
+      const envId = envelopeModel.makeId(EnvType.Tag, line.tag || 'null')
+      const change = { [composite.fx]: line.amount }
+      res[month] ??= makeMonthNode()
+      const bucket = line.amount < 0 ? res[month].outcome : res[month].income
+      const node = (bucket[envId] ??= new EnvActivity())
+      // Every line carries the whole event: opening a category should show the
+      // operation it came from, even though that lists it under each category.
+      node.transactions.push(...trs)
+      node.total = addFxAmount(node.total, change)
+      node.trend[dayIdx] = addFxAmount(node.trend[dayIdx], change)
+    })
+  }
 
   function addTransaction(tr: TTransaction) {
     const fromBudget = inBudgetAccs.includes(tr.outcomeAccount)

@@ -15,6 +15,11 @@ import { registerPopover } from '6-shared/historyPopovers'
 type GroupNode = {
   date: TISODate
   transactions: JSX.Element[]
+  /**
+   * Rows the day takes. Not the same as the number of elements: an expanded
+   * composite operation is one element that draws its parts under itself.
+   */
+  rows?: number
 }
 
 const HEADER_HEIGHT = 48
@@ -91,7 +96,8 @@ export const GrouppedList: FC<GrouppedListProps> = props => {
               itemKey={i => groups[i].date}
               itemSize={i =>
                 HEADER_HEIGHT +
-                TRANSACTION_HEIGHT * groups[i].transactions.length
+                TRANSACTION_HEIGHT *
+                  (groups[i].rows ?? groups[i].transactions.length)
               }
             >
               {Day}
