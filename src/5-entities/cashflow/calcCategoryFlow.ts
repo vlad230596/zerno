@@ -13,6 +13,12 @@ export type TCategoryFlow = {
    */
   byTag: Record<TFlowTagId, TFxAmount>
   /**
+   * How many transactions landed in each category. Tells apart "one big
+   * purchase" from "forty small ones", and on the uncategorized bucket it is
+   * how much the rules missed.
+   */
+  countByTag: Record<TFlowTagId, number>
+  /**
    * What moves between own accounts cost: fees and the difference left by
    * currency exchange. Usually tiny, and a big value here is a signal.
    */
@@ -30,6 +36,7 @@ export function calcCategoryFlow(
   instCodeMap: TInstCodeMap
 ): TCategoryFlow {
   const byTag: Record<TFlowTagId, TFxAmount> = {}
+  const countByTag: Record<TFlowTagId, number> = {}
   let transferFees: TFxAmount = {}
 
   transactions.forEach(tr => {
@@ -43,7 +50,8 @@ export function calcCategoryFlow(
     }
 
     byTag[part.tagId] = addFxAmount(byTag[part.tagId] || {}, part.amount)
+    countByTag[part.tagId] = (countByTag[part.tagId] || 0) + 1
   })
 
-  return { byTag, transferFees }
+  return { byTag, countByTag, transferFees }
 }

@@ -49,6 +49,19 @@ export type TFlowPart = {
 }
 
 /**
+ * True when the transaction is money arriving from outside or leaving for
+ * outside — not a move between own accounts and not a debt. Cheaper than a
+ * full classification when only the kind matters.
+ */
+export function isFlowTransaction(
+  tr: TTransaction,
+  debtAccId: TAccountId | undefined
+): boolean {
+  const type = trModel.getType(tr, debtAccId)
+  return type === TrType.Income || type === TrType.Outcome
+}
+
+/**
  * The single place that decides what a transaction means. Every total in the
  * app — the month balance, the cashflow chart, the search results summary —
  * goes through it, so the numbers cannot drift apart.

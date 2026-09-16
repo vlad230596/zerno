@@ -520,6 +520,11 @@
     "net": "Разница",
     "empty": "В этом месяце ничего не приходило и не уходило",
     "transferFees": "Комиссии и курсовая разница",
+    "untaggedTitle": "Без категории по месяцам",
+    "untaggedTotal_one": "{{count}} операция за год",
+    "untaggedTotal_few": "{{count}} операции за год",
+    "untaggedTotal_many": "{{count}} операций за год",
+    "untaggedTotal_other": "{{count}} операций за год",
     "noCategoryQuery": "нет",
     "transfersQuery": "!перевод"
   },

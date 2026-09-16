@@ -5,12 +5,17 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { accountModel } from '5-entities/account'
-import { calcCategoryFlow, TRANSFER_FEES_ID } from '5-entities/cashflow'
+import {
+  calcCategoryFlow,
+  calcUntaggedByMonth,
+  TRANSFER_FEES_ID,
+} from '5-entities/cashflow'
 import { displayCurrency } from '5-entities/currency/displayCurrency'
 import { instrumentModel } from '5-entities/currency/instrument'
 import { tagModel } from '5-entities/tag'
 import { trModel } from '5-entities/transaction'
 import { makeChunk } from '4-features/transactionSearch'
+import { toISOMonth } from '6-shared/helpers/date'
 
 export type TFlowRowId = TFlowTagId | typeof TRANSFER_FEES_ID
 
@@ -21,6 +26,8 @@ export type TFlowRow = {
   color: string
   /** Signed amount in the display currency: income positive, outcome negative */
   amount: number
+  /** How many transactions are behind the amount */
+  count: number
   /** Search query that opens this row on the transactions page */
   query: string
 }
@@ -79,10 +86,13 @@ export function useMonthFlow(month: TISOMonth): TMonthFlow {
     }
 
     const byRow: Record<string, number> = {}
+    const countByRow: Record<string, number> = {}
     Object.entries(flow.byTag).forEach(([tagId, amount]) => {
       const target =
         rolled[tagId] ?? (rolled[tagId] = rollTarget(tagId as TFlowTagId))
       byRow[target] = (byRow[target] || 0) + toDisplay(amount)
+      countByRow[target] =
+        (countByRow[target] || 0) + (flow.countByTag[tagId as TFlowTagId] || 0)
     })
 
     const rows: TFlowRow[] = []
@@ -96,6 +106,7 @@ export function useMonthFlow(month: TISOMonth): TMonthFlow {
         symbol: tag?.symbol || '?',
         color: tag?.colorDisplay || '#888888',
         amount,
+        count: countByRow[id] || 0,
         query:
           id === 'null'
             ? `${makeChunk('#', noCategoryQuery)} ${month}`
@@ -114,6 +125,7 @@ export function useMonthFlow(month: TISOMonth): TMonthFlow {
         symbol: '💱',
         color: '#808080',
         amount: fees,
+        count: 0,
         query: `${transfersQuery} ${month}`,
       })
     }
@@ -135,4 +147,29 @@ export function useMonthFlow(month: TISOMonth): TMonthFlow {
       net: incomeTotal + outcomeTotal,
     }
   }, [flow, tags, toDisplay, month, noCategoryQuery, transfersQuery, feesName])
+}
+
+/**
+ * Uncategorized transaction count for each of the last `monthCount` months.
+ *
+ * Separate from `useMonthFlow` on purpose: the point is to compare months, so
+ * it has to look past the one on screen. Returns months oldest first.
+ */
+export function useUntaggedTrend(
+  monthCount = 12
+): Array<{ month: TISOMonth; count: number }> {
+  const history = trModel.useTransactionsHistory()
+  const debtAccId = accountModel.useDebtAccountId()
+
+  return useMemo(() => {
+    const byMonth = calcUntaggedByMonth(history, debtAccId)
+    const now = new Date()
+    const months: Array<{ month: TISOMonth; count: number }> = []
+    for (let back = monthCount - 1; back >= 0; back--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - back, 1)
+      const month = toISOMonth(date)
+      months.push({ month, count: byMonth[month] || 0 })
+    }
+    return months
+  }, [history, debtAccId, monthCount])
 }
