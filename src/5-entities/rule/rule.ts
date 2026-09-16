@@ -22,17 +22,20 @@ export type TRule = {
 }
 
 /**
- * What the engine did to a transaction on its last run.
+ * Transactions the rules must not touch: someone set the category by hand.
  *
- * - `{ ruleId, tags }` — the rule owns the transaction and left exactly `tags`
- *   on it. If they differ on the next run, the rule puts its own back.
- * - `'excluded'` — the category was set by hand, so no rule may overwrite it.
- *   Written only by `excludeFromRules`, never inferred, and undone either by
- *   `clearExclusions` or by a rule that agrees with what is already there.
+ * Exceptions are the only thing worth storing. Which rule owns a transaction
+ * used to be written down here as well — a record per transaction — but
+ * nothing read it: whether a rule has to put its category back follows from
+ * comparing the tags on the spot. The whole state lives as JSON inside one
+ * reminder's comment, so a record per transaction meant a store that grows
+ * with the history and has a hard limit at the far end.
+ *
+ * An exception is written only by `excludeFromRules`, never inferred, and
+ * undone either by `clearExclusions` or by a rule that agrees with what is
+ * already on the transaction.
  */
-export type TRuleTrack = { ruleId: string; tags: TTagId[] } | 'excluded'
-
-export type TRuleState = Record<TTransactionId, TRuleTrack>
+export type TRuleState = TTransactionId[]
 
 /** Rule list. Array order is priority: index 0 wins. */
 export const ruleStore = makeSimpleHiddenStore<TRule[]>(
@@ -42,15 +45,33 @@ export const ruleStore = makeSimpleHiddenStore<TRule[]>(
 
 export const ruleStateStore = makeSimpleHiddenStore<TRuleState>(
   HiddenDataType.RuleState,
-  {}
+  []
 )
 
 export const getRules: TSelector<TRule[]> = ruleStore.getData
 
-export const getRuleState: TSelector<TRuleState> = ruleStateStore.getData
+/** True when the exceptions are unreadable — see `getIsBroken`. */
+export const getIsRuleStateBroken: TSelector<boolean> =
+  ruleStateStore.getIsBroken
 
 /** Transactions the rules are told to keep their hands off */
 export const getExcludedIds: TSelector<TTransactionId[]> = createSelector(
-  [getRuleState],
-  ruleState => Object.keys(ruleState).filter(id => ruleState[id] === 'excluded')
+  [ruleStateStore.getData],
+  toExcludedIds
 )
+
+/**
+ * Reads both the current shape and the `Record<id, track>` one that came
+ * before it. Old state stays on the server until the next write, and anything
+ * that is not an exception in it was never read anyway.
+ */
+export function toExcludedIds(stored: unknown): TTransactionId[] {
+  if (Array.isArray(stored)) {
+    return stored.filter((id): id is TTransactionId => typeof id === 'string')
+  }
+  if (stored && typeof stored === 'object') {
+    const byId = stored as Record<string, unknown>
+    return Object.keys(byId).filter(id => byId[id] === 'excluded')
+  }
+  return []
+}

@@ -1,5 +1,5 @@
 import { useAppSelector } from 'store'
-import { getExcludedIds, getRules, getRuleState } from './rule'
+import { getExcludedIds, getRules } from './rule'
 import {
   clearExclusions,
   createRule,
@@ -11,17 +11,15 @@ import {
   updateRule,
 } from './ruleEngine'
 
-export type { TRule, TRuleState, TRuleTrack } from './rule'
+export type { TRule, TRuleState } from './rule'
 
 export const ruleModel = {
   // Selectors
   getRules,
-  getRuleState,
   getExcludedIds,
 
   // Hooks
   useRules: () => useAppSelector(getRules),
-  useRuleState: () => useAppSelector(getRuleState),
   useExcludedIds: () => useAppSelector(getExcludedIds),
 
   // Helpers

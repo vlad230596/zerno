@@ -1,13 +1,19 @@
 import type { ById, TTagId, TTransaction, TTransactionId } from '6-shared/types'
 import type { TrCondition } from '5-entities/transaction'
 import type { AppThunk } from 'store'
-import type { TRule, TRuleState, TRuleTrack } from './rule'
+import type { TRule } from './rule'
 
 import { v1 as uuidv1 } from 'uuid'
 import { applyClientPatch } from 'store/data'
 import { sendEvent } from '6-shared/helpers/tracking'
 import { trModel, TrType } from '5-entities/transaction'
-import { getRules, getRuleState, ruleStateStore, ruleStore } from './rule'
+import {
+  getExcludedIds,
+  getIsRuleStateBroken,
+  getRules,
+  ruleStateStore,
+  ruleStore,
+} from './rule'
 
 type TrTypeGetter = (tr: TTransaction) => TrType
 
@@ -45,10 +51,21 @@ export function getMatchingTransactions(
  */
 export const runAllRules = (): AppThunk<void> => (dispatch, getState) => {
   const state = getState()
+  // The exceptions are the only thing standing between a rule and a category
+  // set by hand. If they cannot be read, an empty list is indistinguishable
+  // from "nothing is protected", so the engine does nothing at all.
+  if (getIsRuleStateBroken(state)) {
+    console.error('Rules: skipped, the list of exceptions is unreadable')
+    return
+  }
+
   const rules = getRules(state)
-  const ruleState = getRuleState(state)
+  const excluded = getExcludedIds(state)
+  // The format before exceptions kept a record per transaction. Rewriting it
+  // is what actually shrinks a store that had grown with the history.
+  const isStale = !Array.isArray(ruleStateStore.getData(state))
   // Nothing to apply and nothing to forget — don't even create the store.
-  if (!rules.length && !Object.keys(ruleState).length) return
+  if (!rules.length && !excluded.length && !isStale) return
 
   const transactions = trModel.getTransactionsById(state)
   const getTrType = trModel.getTrTypeGetter(state)
@@ -59,57 +76,44 @@ export const runAllRules = (): AppThunk<void> => (dispatch, getState) => {
     check: trModel.checkRaw(rule.condition),
   }))
 
-  const nextState: TRuleState = { ...ruleState }
+  const nextExcluded = new Set(excluded)
   const patch: TTransaction[] = []
-  let stateChanged = false
-
-  const setTrack = (id: string, track: TRuleTrack) => {
-    nextState[id] = track
-    stateChanged = true
-  }
 
   Object.values(transactions).forEach(tr => {
     if (!isTaggable(tr, getTrType)) return
-    const track = ruleState[tr.id]
     const rule = checkers.find(c => c.check(tr))?.rule
+    if (!rule) return
 
-    if (track === 'excluded') {
+    if (nextExcluded.has(tr.id)) {
       // An exception only protects against being overwritten. When a rule
       // would set exactly what is already on the transaction, there is
       // nothing left to protect, so the engine takes it back — this is what
       // makes "fix the category, then build a rule out of it" work.
-      if (rule && sameTags(tr.tag, rule.tags)) {
-        setTrack(tr.id, { ruleId: rule.id, tags: [...rule.tags] })
-      }
-      return
-    }
-
-    if (!rule) {
-      // No rule matches anymore. Leave the tags as they are, just stop tracking.
-      if (track) {
-        delete nextState[tr.id]
-        stateChanged = true
-      }
+      if (sameTags(tr.tag, rule.tags)) nextExcluded.delete(tr.id)
       return
     }
 
     if (!sameTags(tr.tag, rule.tags)) {
       patch.push({ ...tr, tag: [...rule.tags], changed: Date.now() })
     }
-    if (
-      !track ||
-      track.ruleId !== rule.id ||
-      !sameTags(track.tags, rule.tags)
-    ) {
-      setTrack(tr.id, { ruleId: rule.id, tags: [...rule.tags] })
-    }
   })
+
+  // An exception for a transaction that no longer exists protects nothing and
+  // would sit in the store forever. Skipped on an empty store, where every id
+  // would look deleted.
+  if (Object.keys(transactions).length) {
+    nextExcluded.forEach(id => {
+      if (!transactions[id]) nextExcluded.delete(id)
+    })
+  }
 
   if (patch.length) {
     sendEvent(`Rules: applied to ${patch.length} transactions`)
     dispatch(applyClientPatch({ transaction: patch }))
   }
-  if (stateChanged) dispatch(ruleStateStore.setData(nextState))
+  if (isStale || nextExcluded.size !== excluded.length) {
+    dispatch(ruleStateStore.setData([...nextExcluded]))
+  }
 }
 
 /**
@@ -126,6 +130,12 @@ export const excludeFromRules =
     const state = getState()
     const rules = getRules(state)
     if (!rules.length || !ids.length) return
+    // Writing here would replace the unreadable store with a list holding this
+    // one id, dropping every exception still sitting in there.
+    if (getIsRuleStateBroken(state)) {
+      console.error('Rules: cannot add an exception, the store is unreadable')
+      return
+    }
 
     const transactions = trModel.getTransactionsById(state)
     const getTrType = trModel.getTrTypeGetter(state)
@@ -133,24 +143,22 @@ export const excludeFromRules =
       rule,
       check: trModel.checkRaw(rule.condition),
     }))
-    const ruleState = getRuleState(state)
-    const nextState: TRuleState = { ...ruleState }
-    let stateChanged = false
+    const excluded = getExcludedIds(state)
+    const nextExcluded = new Set(excluded)
 
     ids.forEach(id => {
       const tr = transactions[id]
       if (!tr || !isTaggable(tr, getTrType)) return
-      if (ruleState[id] === 'excluded') return
+      if (nextExcluded.has(id)) return
       const rule = checkers.find(c => c.check(tr))?.rule
       // Nothing would overwrite it, or it already agrees with the rule
       if (!rule || sameTags(tr.tag, rule.tags)) return
-      nextState[id] = 'excluded'
-      stateChanged = true
+      nextExcluded.add(id)
     })
 
-    if (stateChanged) {
+    if (nextExcluded.size !== excluded.length) {
       sendEvent('Rules: exclude transactions')
-      dispatch(ruleStateStore.setData(nextState))
+      dispatch(ruleStateStore.setData([...nextExcluded]))
     }
   }
 
@@ -159,19 +167,9 @@ export const excludeFromRules =
  * a wrongly excluded transaction, which used to be a dead end.
  */
 export const clearExclusions = (): AppThunk<void> => (dispatch, getState) => {
-  const ruleState = getRuleState(getState())
-  const nextState: TRuleState = {}
-  let stateChanged = false
-  Object.entries(ruleState).forEach(([id, track]) => {
-    if (track === 'excluded') {
-      stateChanged = true
-      return
-    }
-    nextState[id] = track
-  })
-  if (!stateChanged) return
+  if (!getExcludedIds(getState()).length) return
   sendEvent('Rules: clear exclusions')
-  dispatch(ruleStateStore.setData(nextState))
+  dispatch(ruleStateStore.setData([]))
   dispatch(runAllRules())
 }
 
