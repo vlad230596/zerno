@@ -29,6 +29,7 @@ import { useAppDispatch } from 'store'
 import { applyClientPatch } from 'store/data'
 import { TagSelect2 } from '5-entities/tag/ui/TagSelect2'
 import { trModel } from '5-entities/transaction'
+import { ruleModel } from '5-entities/rule'
 import { instrumentModel } from '5-entities/currency/instrument'
 import { displayCurrency } from '5-entities/currency/displayCurrency'
 import { BulkEditModal } from './BulkEditModal'
@@ -68,6 +69,8 @@ const Actions: FC<ActionsProps> = ({
     if (!id || id === 'null')
       dispatch(trModel.bulkEditTransactions(checkedIds, { tags: [] }))
     else dispatch(trModel.bulkEditTransactions(checkedIds, { tags: [id] }))
+    // Set by hand, so the rules are told to leave these alone
+    dispatch(ruleModel.excludeFromRules(checkedIds))
     closeMenu()
     onUncheckAll()
   }

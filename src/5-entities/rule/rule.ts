@@ -2,6 +2,7 @@ import type { TTagId, TTransactionId } from '6-shared/types'
 import type { TrCondition } from '5-entities/transaction'
 import type { TSelector } from 'store'
 
+import { createSelector } from '@reduxjs/toolkit'
 import {
   HiddenDataType,
   makeSimpleHiddenStore,
@@ -24,9 +25,10 @@ export type TRule = {
  * What the engine did to a transaction on its last run.
  *
  * - `{ ruleId, tags }` — the rule owns the transaction and left exactly `tags`
- *   on it. If the actual tags differ on the next run, somebody edited them by
- *   hand and the transaction becomes an exception.
- * - `'excluded'` — hand-edited once, never touched by rules again.
+ *   on it. If they differ on the next run, the rule puts its own back.
+ * - `'excluded'` — the category was set by hand, so no rule may overwrite it.
+ *   Written only by `excludeFromRules`, never inferred, and undone either by
+ *   `clearExclusions` or by a rule that agrees with what is already there.
  */
 export type TRuleTrack = { ruleId: string; tags: TTagId[] } | 'excluded'
 
@@ -46,3 +48,9 @@ export const ruleStateStore = makeSimpleHiddenStore<TRuleState>(
 export const getRules: TSelector<TRule[]> = ruleStore.getData
 
 export const getRuleState: TSelector<TRuleState> = ruleStateStore.getData
+
+/** Transactions the rules are told to keep their hands off */
+export const getExcludedIds: TSelector<TTransactionId[]> = createSelector(
+  [getRuleState],
+  ruleState => Object.keys(ruleState).filter(id => ruleState[id] === 'excluded')
+)

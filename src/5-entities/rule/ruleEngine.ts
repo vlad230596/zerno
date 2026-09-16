@@ -1,4 +1,4 @@
-import type { ById, TTagId, TTransaction } from '6-shared/types'
+import type { ById, TTagId, TTransaction, TTransactionId } from '6-shared/types'
 import type { TrCondition } from '5-entities/transaction'
 import type { AppThunk } from 'store'
 import type { TRule, TRuleState, TRuleTrack } from './rule'
@@ -36,10 +36,12 @@ export function getMatchingTransactions(
  * The only entry point of the engine. Walks every transaction and brings it in
  * line with the rules.
  *
- * Instead of hooking into every way a tag can be edited, the engine remembers
- * what it left on each transaction (`ruleState`) and compares on the next run.
- * A mismatch means a human edited the category, so the transaction is excluded
- * from rules for good — a manual fix is never rolled back.
+ * Exceptions are marked explicitly by `excludeFromRules` at the moment a
+ * person edits a category, never guessed here. The engine used to infer them
+ * by noticing that the tags had moved since its last run, but it could not
+ * tell a person from the server — a category reassigned by ZenMoney on import
+ * looked exactly like a manual fix and silently took the transaction out of
+ * the rules forever, with no way back.
  */
 export const runAllRules = (): AppThunk<void> => (dispatch, getState) => {
   const state = getState()
@@ -67,18 +69,20 @@ export const runAllRules = (): AppThunk<void> => (dispatch, getState) => {
   }
 
   Object.values(transactions).forEach(tr => {
-    const track = ruleState[tr.id]
-    if (track === 'excluded') return
     if (!isTaggable(tr, getTrType)) return
+    const track = ruleState[tr.id]
+    const rule = checkers.find(c => c.check(tr))?.rule
 
-    // The engine touched this one before and the tags moved since — a human did
-    // that, so this transaction is an exception from now on.
-    if (track && !sameTags(tr.tag, track.tags)) {
-      setTrack(tr.id, 'excluded')
+    if (track === 'excluded') {
+      // An exception only protects against being overwritten. When a rule
+      // would set exactly what is already on the transaction, there is
+      // nothing left to protect, so the engine takes it back — this is what
+      // makes "fix the category, then build a rule out of it" work.
+      if (rule && sameTags(tr.tag, rule.tags)) {
+        setTrack(tr.id, { ruleId: rule.id, tags: [...rule.tags] })
+      }
       return
     }
-
-    const rule = checkers.find(c => c.check(tr))?.rule
 
     if (!rule) {
       // No rule matches anymore. Leave the tags as they are, just stop tracking.
@@ -106,6 +110,69 @@ export const runAllRules = (): AppThunk<void> => (dispatch, getState) => {
     dispatch(applyClientPatch({ transaction: patch }))
   }
   if (stateChanged) dispatch(ruleStateStore.setData(nextState))
+}
+
+/**
+ * Takes transactions out of the rules, because a person just set their
+ * category by hand and that choice must not be rolled back.
+ *
+ * Only transactions a rule would actually change are marked: if nothing wants
+ * to overwrite them, there is nothing to protect them from, and writing an
+ * exception would only grow the stored state for no reason.
+ */
+export const excludeFromRules =
+  (ids: TTransactionId[]): AppThunk<void> =>
+  (dispatch, getState) => {
+    const state = getState()
+    const rules = getRules(state)
+    if (!rules.length || !ids.length) return
+
+    const transactions = trModel.getTransactionsById(state)
+    const getTrType = trModel.getTrTypeGetter(state)
+    const checkers = rules.map(rule => ({
+      rule,
+      check: trModel.checkRaw(rule.condition),
+    }))
+    const ruleState = getRuleState(state)
+    const nextState: TRuleState = { ...ruleState }
+    let stateChanged = false
+
+    ids.forEach(id => {
+      const tr = transactions[id]
+      if (!tr || !isTaggable(tr, getTrType)) return
+      if (ruleState[id] === 'excluded') return
+      const rule = checkers.find(c => c.check(tr))?.rule
+      // Nothing would overwrite it, or it already agrees with the rule
+      if (!rule || sameTags(tr.tag, rule.tags)) return
+      nextState[id] = 'excluded'
+      stateChanged = true
+    })
+
+    if (stateChanged) {
+      sendEvent('Rules: exclude transactions')
+      dispatch(ruleStateStore.setData(nextState))
+    }
+  }
+
+/**
+ * Forgets every exception and lets the rules take over again. The way out of
+ * a wrongly excluded transaction, which used to be a dead end.
+ */
+export const clearExclusions = (): AppThunk<void> => (dispatch, getState) => {
+  const ruleState = getRuleState(getState())
+  const nextState: TRuleState = {}
+  let stateChanged = false
+  Object.entries(ruleState).forEach(([id, track]) => {
+    if (track === 'excluded') {
+      stateChanged = true
+      return
+    }
+    nextState[id] = track
+  })
+  if (!stateChanged) return
+  sendEvent('Rules: clear exclusions')
+  dispatch(ruleStateStore.setData(nextState))
+  dispatch(runAllRules())
 }
 
 export const createRule =

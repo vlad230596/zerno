@@ -13,14 +13,74 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import { Box, IconButton, Paper, Stack, Typography } from '@mui/material'
+import {
+  Box,
+  Button,
+  IconButton,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material'
 import { Tooltip } from '6-shared/ui/Tooltip'
 import { DeleteIcon, DragIndicatorIcon, EditIcon } from '6-shared/ui/Icons'
 import { useConfirm } from '6-shared/ui/SmartConfirm'
 import { useAppDispatch } from 'store'
 import { ruleModel } from '5-entities/rule'
+import { trModel } from '5-entities/transaction'
 import { TagChip } from '5-entities/tag/ui/TagChip'
+import { useTransactionDrawer } from '3-widgets/global/TransactionListDrawer'
 import { RuleModal, useConditionDescriber } from '4-features/transactionRules'
+
+/**
+ * Transactions the rules are not allowed to touch, and the way back.
+ *
+ * Without this the exceptions were invisible and permanent: anything that
+ * ended up excluded quietly stopped being maintained, and there was nothing
+ * to look at and no way to undo it.
+ */
+const ExcludedNotice: FC = () => {
+  const { t } = useTranslation('rules')
+  const dispatch = useAppDispatch()
+  const excludedIds = ruleModel.useExcludedIds()
+  const transactionsById = trModel.useTransactions()
+  const drawer = useTransactionDrawer()
+
+  const showExcluded = () => {
+    const transactions = excludedIds
+      .map(id => transactionsById[id])
+      .filter(Boolean)
+      .sort(trModel.compareTrDates)
+    drawer.open({ title: t('excludedTitle'), transactions })
+  }
+
+  const resetExclusions = useConfirm({
+    title: t('excludedResetConfirm', { count: excludedIds.length }),
+    okText: t('excludedResetOk'),
+    cancelText: t('deleteCancel'),
+    onOk: () => dispatch(ruleModel.clearExclusions()),
+  })
+
+  if (!excludedIds.length) return null
+
+  return (
+    <Paper sx={{ p: 2 }}>
+      <Typography variant="body2">
+        {t('excludedCount', { count: excludedIds.length })}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        {t('excludedHint')}
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+        <Button size="small" onClick={showExcluded}>
+          {t('excludedShow')}
+        </Button>
+        <Button size="small" color="error" onClick={resetExclusions}>
+          {t('excludedReset')}
+        </Button>
+      </Box>
+    </Paper>
+  )
+}
 
 const touchSensorOptions = {
   activationConstraint: { delay: 250, tolerance: 5 },
@@ -61,6 +121,8 @@ export default function Rules() {
           {t('subtitle')}
         </Typography>
       </Box>
+
+      <ExcludedNotice />
 
       {!rules.length ? (
         <Paper sx={{ p: 3 }}>

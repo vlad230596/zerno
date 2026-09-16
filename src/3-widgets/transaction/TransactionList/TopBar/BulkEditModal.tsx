@@ -15,6 +15,7 @@ import {
 } from '@mui/material'
 import { useAppDispatch } from 'store'
 import { trModel } from '5-entities/transaction'
+import { ruleModel } from '5-entities/rule'
 import { TagList } from '5-entities/tag/ui/TagList'
 
 type BulkEditModalProps = Modify<DialogProps, { onClose: () => void }> & {
@@ -57,6 +58,8 @@ export const BulkEditModal: FC<BulkEditModalProps> = ({
     }
     if (opts.tags || opts.comment) {
       dispatch(trModel.bulkEditTransactions(ids, opts))
+      // Set by hand, so the rules are told to leave these alone
+      if (opts.tags) dispatch(ruleModel.excludeFromRules(ids))
     }
     onApply()
   }

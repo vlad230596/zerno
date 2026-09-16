@@ -32,10 +32,6 @@ const initialState: DataSlice = {
   diff: undefined,
 }
 
-interface ExtendedDiff extends TDiff {
-  syncStartTime?: number
-}
-
 // SLICE
 const { reducer, actions } = createSlice({
   name: 'data',
@@ -43,12 +39,13 @@ const { reducer, actions } = createSlice({
   reducers: {
     applyServerPatch: withPerf(
       'applyServerPatch',
-      (state, { payload }: PayloadAction<ExtendedDiff>) => {
+      (state, { payload }: PayloadAction<TDiff>) => {
         if (!payload) return
         state.server ??= makeDataStore()
         applyDiffMutable(payload, state.server)
         state.current = state.server
-        // TODO: Тут хорошо бы не всё удалять, а только то что синхронизировалось (по времени старта). После этого надо ещё current пересобрать на основе серверных данных и диффа
+        // Whatever the server did not accept yet is put back on top by the
+        // `applyClientPatch` that `syncData` dispatches right after this
         state.diff = undefined
       }
     ),

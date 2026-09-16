@@ -35,6 +35,7 @@ import { trModel } from '5-entities/transaction'
 import { accountModel } from '5-entities/account'
 import { instrumentModel } from '5-entities/currency/instrument'
 import { TagList } from '5-entities/tag/ui/TagList'
+import { ruleModel } from '5-entities/rule'
 import { RuleModal } from '4-features/transactionRules'
 
 import { Reciept } from './Reciept'
@@ -141,6 +142,11 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
     localTag !== tag ||
     timeChanged
 
+  // A category set by hand outranks the rules, and they are told so at the
+  // moment it happens — guessing it later from a mismatch cannot tell a
+  // person from the server
+  const tagChanged = localTag !== tag
+
   const onSave = () => {
     if (timeChanged) {
       const hh = +localTime.split(':')[0]
@@ -160,6 +166,7 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
           tag: localTag,
         })
       ) as unknown
+      if (tagChanged) dispatch(ruleModel.excludeFromRules([newId as string]))
       onOpenOther(newId as string)
     } else if (hasChanges) {
       dispatch(
@@ -173,6 +180,7 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
           tag: localTag,
         })
       )
+      if (tagChanged) dispatch(ruleModel.excludeFromRules([id]))
     }
   }
 
@@ -218,7 +226,10 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
       >
         {trType !== 'income' && (
           <Stack spacing={1}>
-            <AccountLine label={t('accountFrom')} title={outcomeAccount.title} />
+            <AccountLine
+              label={t('accountFrom')}
+              title={outcomeAccount.title}
+            />
             <AmountInput
               label={t('amountOutcome')}
               currency={outcomeCurrency}
@@ -338,7 +349,10 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
  * gets a line of its own above the amount instead of riding along in the
  * field's label, where it used to be cut off.
  */
-const AccountLine: FC<{ label: string; title: string }> = ({ label, title }) => (
+const AccountLine: FC<{ label: string; title: string }> = ({
+  label,
+  title,
+}) => (
   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
     {label}:{' '}
     <Box component="span" sx={{ color: 'text.primary' }}>
