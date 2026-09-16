@@ -30,9 +30,11 @@ import {
   makeDateArray,
   toGroup,
 } from '6-shared/helpers/date'
-import { formatMoney } from '6-shared/helpers/money'
+import { addFxAmount, formatMoney } from '6-shared/helpers/money'
 import { ChevronDownIcon } from '6-shared/ui/Icons'
 import { useAppTheme } from '6-shared/ui/theme'
+import { accountModel } from '5-entities/account'
+import { classifyTransaction, FlowKind } from '5-entities/cashflow'
 import { instrumentModel } from '5-entities/currency/instrument'
 import {
   DisplayAmount,
@@ -70,7 +72,10 @@ export const TrStats: FC<TrStatsProps> = ({ transactions, onPeriodClick }) => {
     if (!isToggledByUser.current) setExpanded(!isMobile)
   }, [isMobile])
 
-  const { points, income, outcome } = useAggregation(transactions, groupBy)
+  const { points, income, outcome, debts, transfers } = useAggregation(
+    transactions,
+    groupBy
+  )
   const hasIncome = income > 0
   const hasOutcome = outcome > 0
 
@@ -139,6 +144,15 @@ export const TrStats: FC<TrStatsProps> = ({ transactions, onPeriodClick }) => {
             minWidth: 0,
           }}
         >
+          {/*
+            Moves between own accounts and debts are not income and not
+            spending, so they get their own totals instead of inflating these
+            two. They only show up when the search actually asks for them
+          */}
+          {!!transfers && (
+            <Total label={t('type_transfer')} value={transfers} />
+          )}
+          {!!debts && <Total label={t('type_debt')} value={debts} />}
           {hasOutcome && (
             <Total label={t('outcome')} value={-outcome} color={colorOutcome} />
           )}
@@ -302,41 +316,98 @@ const MAX_POINTS = 500
 /**
  * Sums up the transactions and groups them by day, month or year.
  * Amounts are converted to the display currency using rates of the period.
+ *
+ * Every transaction goes through `classifyTransaction`, so income and outcome
+ * mean the same here as everywhere else: money that came from outside and
+ * money that left. Moving money between own accounts and lending it are not
+ * spending, so they are counted apart — otherwise a single move between two
+ * banks would land in both totals and double them.
  */
 function useAggregation(transactions: TTransaction[], groupBy: GroupBy) {
   const instCodeMap = instrumentModel.useInstCodeMap()
+  const debtAccId = accountModel.useDebtAccountId()
   const toDisplay = displayCurrency.useToDisplay('current')
 
   return useMemo(() => {
     // First sum up raw amounts by currency, then convert once per group
-    const raw: Record<TISODate, { income: TFxAmount; outcome: TFxAmount }> = {}
+    const raw: Record<
+      TISODate,
+      { income: TFxAmount; outcome: TFxAmount; transferResidue: TFxAmount }
+    > = {}
+    // Informational totals, so a list filtered to debts or transfers doesn't
+    // look like it moved no money at all
+    let rawDebts: TFxAmount = {}
+    let rawTransfers: TFxAmount = {}
+
     transactions.forEach(tr => {
       const date = toGroup(tr.date, groupBy)
-      raw[date] ??= { income: {}, outcome: {} }
-      if (tr.income) {
-        const code = instCodeMap[tr.incomeInstrument]
-        raw[date].income[code] = (raw[date].income[code] || 0) + tr.income
-      }
-      if (tr.outcome) {
-        const code = instCodeMap[tr.outcomeInstrument]
-        raw[date].outcome[code] = (raw[date].outcome[code] || 0) + tr.outcome
+      raw[date] ??= { income: {}, outcome: {}, transferResidue: {} }
+      const part = classifyTransaction(tr, debtAccId, instCodeMap)
+
+      switch (part.kind) {
+        case FlowKind.Income:
+          raw[date].income = addFxAmount(raw[date].income, part.amount)
+          return
+
+        case FlowKind.Outcome:
+          // Amounts are negative, the chart and the labels want magnitudes
+          raw[date].outcome = addFxAmount(
+            raw[date].outcome,
+            negate(part.amount)
+          )
+          return
+
+        case FlowKind.Debt:
+          rawDebts = addFxAmount(rawDebts, part.amount)
+          return
+
+        case FlowKind.Transfer:
+          rawTransfers = addFxAmount(rawTransfers, {
+            [instCodeMap[tr.outcomeInstrument]]: tr.outcome,
+          })
+          // What the move itself cost is real money and stays in the totals.
+          // A currency exchange leaves an amount that is positive in one
+          // currency and negative in another, so its side is only known once
+          // it is converted — hence a bucket of its own
+          raw[date].transferResidue = addFxAmount(
+            raw[date].transferResidue,
+            part.amount
+          )
+          return
       }
     })
 
     const dates = (Object.keys(raw) as TISODate[]).sort()
 
+    /** Income and outcome of one group, with the transfer residue folded in */
+    const flowAt = (date: TISODate) => {
+      const node = raw[date]
+      if (!node) return { income: 0, outcome: 0 }
+      let income = toDisplay(node.income, date)
+      let outcome = toDisplay(node.outcome, date)
+      const residue = toDisplay(node.transferResidue, date)
+      if (residue < 0) outcome -= residue
+      else income += residue
+      return { income, outcome }
+    }
+
     // Totals count every transaction, even those left out of the chart
     let income = 0
     let outcome = 0
     dates.forEach(date => {
-      income += toDisplay(raw[date].income, date)
-      outcome += toDisplay(raw[date].outcome, date)
+      const flow = flowAt(date)
+      income += flow.income
+      outcome += flow.outcome
     })
+    const debts = toDisplay(rawDebts)
+    const transfers = toDisplay(rawTransfers)
+
+    const empty = { points: [] as Point[], income, outcome, debts, transfers }
 
     const firstGroup = toGroup(FIRST_REASONABLE_DATE, groupBy)
     const lastGroup = toGroup(new Date(), groupBy)
     const inRange = dates.filter(d => d >= firstGroup && d <= lastGroup)
-    if (!inRange.length) return { points: [] as Point[], income, outcome }
+    if (!inRange.length) return empty
 
     const range = makeDateArray(
       inRange[0],
@@ -344,14 +415,19 @@ function useAggregation(transactions: TTransaction[], groupBy: GroupBy) {
       groupBy
     )
     const visible = range.length > MAX_POINTS ? range.slice(-MAX_POINTS) : range
-    const points = visible.map(date => ({
-      date,
-      income: raw[date] ? toDisplay(raw[date].income, date) : 0,
-      outcome: raw[date] ? toDisplay(raw[date].outcome, date) : 0,
-    }))
+    const points = visible.map(date => ({ date, ...flowAt(date) }))
 
-    return { points, income, outcome }
-  }, [transactions, groupBy, instCodeMap, toDisplay])
+    return { points, income, outcome, debts, transfers }
+  }, [transactions, groupBy, instCodeMap, debtAccId, toDisplay])
+}
+
+/** Flips the sign of every currency in the amount */
+function negate(amount: TFxAmount): TFxAmount {
+  const result: TFxAmount = {}
+  Object.entries(amount).forEach(([code, value]) => {
+    result[code] = -value
+  })
+  return result
 }
 
 const ChartTooltip = (props: any) => {

@@ -89,6 +89,7 @@ const Settings = (props: { onClose: () => void; showLinks?: boolean }) => {
       <ThemeItem onClose={props.onClose} />
       <ReloadDataItem onClose={props.onClose} />
       <AutoSyncItem />
+      <MainPanelItem onClose={props.onClose} />
       {isExpanded ? (
         <>
           <BackgroundCheckItem />
@@ -385,6 +386,42 @@ function BackgroundCheckItem() {
         </MenuItem>
       )}
     </>
+  )
+}
+
+/**
+ * Switches the home panel between the month balance and the envelope budget.
+ * Navigates to the panel it turns on, otherwise the user is left on a page
+ * that is no longer in the navigation.
+ */
+function MainPanelItem({ onClose }: ItemProps) {
+  const { t } = useTranslation('settings')
+  const { t: tNav } = useTranslation('navigation')
+  const dispatch = useAppDispatch()
+  const history = useHistory()
+  const { mainPanel } = userSettingsModel.useUserSettings()
+  const next = mainPanel === 'budget' ? 'balance' : 'budget'
+
+  const handleClick = () => {
+    sendEvent(`Settings: main panel set to ${next}`)
+    dispatch(userSettingsModel.patch({ mainPanel: next }))
+    onClose()
+    setTimeout(
+      () => history.push(next === 'budget' ? '/budget' : '/balance'),
+      10
+    )
+  }
+
+  return (
+    <MenuItem onClick={handleClick}>
+      <ListItemIcon>
+        <AccountBalanceWalletIcon />
+      </ListItemIcon>
+      <ListItemText>{t('mainPanel')}</ListItemText>
+      <ListItemSecondaryAction>
+        {mainPanel === 'budget' ? tNav('budget') : tNav('balance')}
+      </ListItemSecondaryAction>
+    </MenuItem>
   )
 }
 

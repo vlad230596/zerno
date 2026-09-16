@@ -5,7 +5,11 @@ import {
   resetUserSettings,
 } from './userSettings'
 
-export type { TUserSettings, TUserSettingsPatch } from './userSettings'
+export type {
+  TUserSettings,
+  TUserSettingsPatch,
+  TMainPanel,
+} from './userSettings'
 
 export const userSettingsModel = {
   // Selectors

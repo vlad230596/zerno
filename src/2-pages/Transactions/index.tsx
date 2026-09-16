@@ -1,13 +1,17 @@
-import React, { useState, FC, useCallback } from 'react'
+import React, { useState, FC, useCallback, useMemo } from 'react'
+import { useHistory, useLocation } from 'react-router-dom'
 import { TransactionList } from '3-widgets/transaction/TransactionList'
 import {
   Box,
   Drawer,
+  IconButton,
   useMediaQuery,
   Paper,
   Theme,
+  Typography,
   DrawerProps,
 } from '@mui/material'
+import { ArrowBackIcon } from '6-shared/ui/Icons'
 import {
   TrEmptyState,
   TransactionPreview,
@@ -29,6 +33,24 @@ const sideSx = {
 export default function TransactionsView() {
   const { t } = useTranslation('transactions')
   const isMobile = useMediaQuery<Theme>(theme => theme.breakpoints.down('md'))
+  const location = useLocation()
+  const history = useHistory()
+
+  /**
+   * Another page can send the user here with filters already typed into the
+   * search (`?q=`) and a way back to itself (`?from=`). The filters land in
+   * the normal search bar, so they show up as chips and can be edited.
+   */
+  const { initialQuery, backPath } = useMemo(() => {
+    const params = new URLSearchParams(location.search)
+    const from = params.get('from') || ''
+    // Only our own paths, never an absolute or protocol-relative URL
+    const isInternal = from.startsWith('/') && !from.startsWith('//')
+    return {
+      initialQuery: params.get('q') || undefined,
+      backPath: isInternal ? from : null,
+    }
+  }, [location.search])
   const [checkedDate, setCheckedDate] = useState<Date | null>(null)
   const { open } = trPreview.useMethods()
   const openedProps = trPreview.useProps()
@@ -62,20 +84,50 @@ export default function TransactionsView() {
             p: { xs: 0, md: 2 },
             flexGrow: 1,
             minWidth: 0,
+            minHeight: 0,
             display: 'flex',
-            justifyContent: 'center',
+            flexDirection: 'column',
+            alignItems: 'center',
           }}
         >
+          {backPath && (
+            <Box
+              sx={{
+                width: '100%',
+                maxWidth: 560,
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                px: { xs: 0.5, md: 0 },
+                pt: { xs: 0.5, md: 0 },
+                pb: { xs: 0.5, md: 1 },
+              }}
+            >
+              <IconButton size="small" onClick={() => history.push(backPath)}>
+                <ArrowBackIcon fontSize="small" />
+              </IconButton>
+              <Typography variant="body2" color="text.secondary">
+                {t('back')}
+              </Typography>
+            </Box>
+          )}
           <Paper
             sx={{
               flex: '1 1 auto',
               display: 'flex',
               overflow: 'hidden',
+              width: '100%',
               maxWidth: 560,
+              minHeight: 0,
               pb: { xs: 7, md: 0 },
             }}
           >
             <TransactionList
+              // Remounts when another category is opened, so the new
+              // filters actually reach the search bar
+              key={initialQuery ?? ''}
+              initialQuery={initialQuery}
               checkedDate={checkedDate}
               sx={{ flex: '1 1 auto' }}
               onTrOpen={handleTrOpen}

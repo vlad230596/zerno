@@ -14,7 +14,6 @@ import {
   ListItemButton,
 } from '@mui/material'
 import {
-  AccountBalanceIcon,
   HelpOutlineIcon,
   SyncAltIcon,
   WhatshotIcon,
@@ -27,6 +26,7 @@ import { useAppTheme } from '6-shared/ui/theme'
 import AccountList from '3-widgets/account/AccountList'
 import { DebtorList } from '3-widgets/DebtorList'
 import { useTranslation } from 'react-i18next'
+import { useMainPanel } from './useMainPanel'
 
 export default function NavigationDrawer(props: DrawerProps) {
   const theme = useAppTheme()
@@ -123,12 +123,13 @@ export default function NavigationDrawer(props: DrawerProps) {
 
 function Links() {
   const { t } = useTranslation('navigation')
+  const mainPanel = useMainPanel()
   return (
     <List>
       <NavigationLink
-        text={t('budget')}
-        path="/budget"
-        icon={<AccountBalanceIcon />}
+        text={mainPanel.label}
+        path={mainPanel.path}
+        icon={mainPanel.icon}
       />
       <NavigationLink
         text={t('transactions')}

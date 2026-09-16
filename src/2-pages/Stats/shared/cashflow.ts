@@ -8,7 +8,7 @@ import { instrumentModel } from '5-entities/currency/instrument'
 import { displayCurrency } from '5-entities/currency/displayCurrency'
 import { trModel } from '5-entities/transaction'
 import { Period, getStart } from './period'
-import { calcCashflow } from './calcCashflow'
+import { calcCashflow } from '5-entities/cashflow'
 
 export type TCashflowPoint = {
   date: TISODate

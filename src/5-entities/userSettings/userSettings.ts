@@ -21,7 +21,16 @@ export type TUserSettings = {
    * They are not real spending and only distort the totals.
    */
   ignoreTransfers: boolean
+
+  /**
+   * Which panel is the home screen: the plain month balance by category, or
+   * the envelope budget. Only the chosen one is in the navigation, the other
+   * route still works if opened directly.
+   */
+  mainPanel: TMainPanel
 }
+
+export type TMainPanel = 'balance' | 'budget'
 export type TUserSettingsPatch = Partial<TUserSettings>
 export type TStoredUserSettings = Partial<TUserSettings>
 
@@ -37,6 +46,7 @@ export const getUserSettings: TSelector<TUserSettings> = createSelector(
     preferZmBudgets: raw.preferZmBudgets ?? false,
     emojiIcons: raw.emojiIcons ?? false,
     ignoreTransfers: raw.ignoreTransfers ?? true,
+    mainPanel: raw.mainPanel ?? 'balance',
   })
 )
 

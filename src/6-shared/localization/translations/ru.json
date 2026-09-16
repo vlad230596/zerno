@@ -413,6 +413,7 @@
   "navigation": {
     "settings": "Настройки",
     "budget": "Бюджет",
+    "balance": "Баланс",
     "transactions": "Операции",
     "yearWrapped": "Итоги года",
     "about": "Как пользоваться",
@@ -469,6 +470,7 @@
 
   "settings": {
     "settings": "Настройки",
+    "mainPanel": "Главная панель",
     "installApp": "Установить приложение",
     "backgroundCheck": "Фоновая проверка (тест)",
     "backgroundCheckDescription": "Считает траты за прошедший период и присылает уведомление",
@@ -506,7 +508,20 @@
   "transactions": {
     "pageTitle": "Операции",
     "pageDescription": "Список операций",
+    "back": "Назад",
     "emptyState": "Таких операций нет.\nВозможно, дело в фильтрах."
+  },
+
+  "balance": {
+    "pageTitle": "Баланс",
+    "pageDescription": "Доходы и расходы по категориям за месяц",
+    "income": "Пришло",
+    "outcome": "Ушло",
+    "net": "Разница",
+    "empty": "В этом месяце ничего не приходило и не уходило",
+    "transferFees": "Комиссии и курсовая разница",
+    "noCategoryQuery": "нет",
+    "transfersQuery": "!перевод"
   },
 
   "transaction": {

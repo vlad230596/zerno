@@ -15,6 +15,7 @@ import { useAppSelector } from 'store'
 import { getLoginState } from 'store/token'
 import { getLastSyncTime } from 'store/data/selectors'
 import { userModel } from '5-entities/user'
+import { userSettingsModel } from '5-entities/userSettings'
 import { RegularSyncHandler } from '3-widgets/RegularSyncHandler'
 import { BackgroundCheckHandler } from '3-widgets/BackgroundCheckHandler'
 import Nav from '3-widgets/Navigation'
@@ -23,6 +24,7 @@ import ErrorBoundary from '3-widgets/ErrorBoundary'
 import Transactions from '2-pages/Transactions'
 import Auth from '2-pages/Auth'
 import Budgets from '2-pages/Budgets'
+import Balance from '2-pages/Balance'
 import Accounts from '2-pages/Accounts'
 import { GlobalWidgets } from './GlobalWidgets'
 
@@ -69,9 +71,10 @@ export default function App() {
     <Route key="review" path="/review" component={Review} />,
     <Route key="accounts" path="/accounts" component={Accounts} />,
     <Route key="budget" path="/budget" component={Budgets} />,
+    <Route key="balance" path="/balance" component={Balance} />,
     <Route key="stats" path="/stats" component={Stats} />,
     <Route key="rules" path="/rules" component={Rules} />,
-    <Route key="*" path="*" render={() => <Redirect to="/budget" />} />,
+    <Route key="*" path="*" component={HomeRedirect} />,
   ]
 
   const getRoutes = () => {
@@ -98,6 +101,12 @@ export default function App() {
       </PopoverManager>
     </Router>
   )
+}
+
+/** Sends the user to whichever home panel they chose in the settings */
+function HomeRedirect() {
+  const { mainPanel } = useAppSelector(userSettingsModel.get)
+  return <Redirect to={mainPanel === 'budget' ? '/budget' : '/balance'} />
 }
 
 const Layout: FC<{

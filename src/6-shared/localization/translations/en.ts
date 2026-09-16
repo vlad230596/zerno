@@ -431,6 +431,7 @@ export const en: typeof ru = {
   navigation: {
     settings: 'Settings',
     budget: 'Budget',
+    balance: 'Balance',
     transactions: 'Transactions',
     yearWrapped: 'Year Overview',
     about: 'How to use',
@@ -493,6 +494,7 @@ export const en: typeof ru = {
 
   settings: {
     settings: 'Settings',
+    mainPanel: 'Home panel',
     installApp: 'Install app',
     backgroundCheck: 'Background check (test)',
     backgroundCheckDescription:
@@ -536,8 +538,21 @@ export const en: typeof ru = {
   transactions: {
     pageTitle: 'Transactions',
     pageDescription: 'List of transactions',
+    back: 'Back',
     emptyState:
       "There are no such transactions.\nMaybe it's about the filters.",
+  },
+
+  balance: {
+    pageTitle: 'Balance',
+    pageDescription: 'Income and spending by category for the month',
+    income: 'In',
+    outcome: 'Out',
+    net: 'Net',
+    empty: 'Nothing came in or went out this month',
+    transferFees: 'Fees and fx difference',
+    noCategoryQuery: 'none',
+    transfersQuery: '!transfer',
   },
 
   transaction: {

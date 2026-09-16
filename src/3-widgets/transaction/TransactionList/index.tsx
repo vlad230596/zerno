@@ -43,6 +43,8 @@ export type TTransactionListProps = {
   onTrOpen?: (id: TTransactionId) => void
   opened?: TTransactionId
   transactions?: TTransaction[]
+  /** Search text to start with. Only read on mount — remount to change it */
+  initialQuery?: string
   preFilter?: TrCondition
   hideFilter?: boolean
   checkedDate?: Date | null
@@ -55,6 +57,7 @@ export const TransactionList: FC<TTransactionListProps> = props => {
     onTrOpen,
     opened,
     transactions: transactionObjects,
+    initialQuery,
     preFilter,
     hideFilter = false,
     checkedDate,
@@ -63,7 +66,7 @@ export const TransactionList: FC<TTransactionListProps> = props => {
   } = props
 
   const dispatch = useAppDispatch()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery ?? '')
   const [sort, setSort] = useState<TrSortMode>(DEFAULT_SORT)
 
   // Transfers between own accounts are not spending, so by default they are

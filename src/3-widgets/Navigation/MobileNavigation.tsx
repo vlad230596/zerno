@@ -7,15 +7,11 @@ import {
   Paper,
   Divider,
 } from '@mui/material'
-import {
-  AccountBalanceIcon,
-  BarChartIcon,
-  SettingsIcon,
-  SyncAltIcon,
-} from '6-shared/ui/Icons'
+import { BarChartIcon, SettingsIcon, SyncAltIcon } from '6-shared/ui/Icons'
 import { useHomeBar } from '6-shared/hooks/useHomeBar'
 import RefreshButton from '3-widgets/RefreshButton'
 import { SettingsMenu, useSettingsMenu } from './SettingsMenu'
+import { useMainPanel } from './useMainPanel'
 
 const actionSx = { minWidth: 32 }
 
@@ -28,8 +24,9 @@ export const MobileNavigation: FC = () => {
   const hasHomeBar = useHomeBar()
   const paddingBottom = hasHomeBar ? '20px' : '0px'
 
+  const mainPanel = useMainPanel()
   const routes = [
-    { path: '/budget', label: t('budget'), icon: <AccountBalanceIcon /> },
+    mainPanel,
     { path: '/transactions', label: t('transactions'), icon: <SyncAltIcon /> },
     { path: '/stats', label: t('stats'), icon: <BarChartIcon /> },
   ]
