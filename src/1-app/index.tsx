@@ -5,6 +5,7 @@ import { initSentry } from '6-shared/helpers/tracking'
 import { store } from 'store'
 import { bindWorkerToStore } from 'worker'
 import { applyClientPatch, resetData } from 'store/data'
+import { watchPendingChanges } from '4-features/localData'
 import GlobalErrorBoundary from './GlobalErrorBoundary'
 import App from './App'
 import { Providers } from './Providers'
@@ -18,6 +19,9 @@ registerSW({
 })
 initSentry()
 bindWorkerToStore(store.dispatch)
+// Has to start before anything can be edited, and so before React mounts and
+// `loadLocalData` runs
+watchPendingChanges(store)
 createZerroInstance(store)
 
 export const MainApp = () => (

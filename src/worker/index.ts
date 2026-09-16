@@ -32,6 +32,8 @@ export const workerMethods = Comlink.wrap<WorkerObj>(worker)
 export const {
   convertZmToLocal,
   getLocalData,
+  getPendingDiff,
+  savePendingDiff,
   clearStorage,
   saveLocalData,
   sync,

@@ -22,8 +22,31 @@ const LOCAL_KEYS = [
   'transaction',
 ] as LocalKey[]
 
+/**
+ * Changes made in this browser that the server has not confirmed yet.
+ *
+ * Kept apart from the snapshot under `LOCAL_KEYS`: that one is the server's
+ * state and gets rewritten by every sync, while this is what lies on top of
+ * it. Restoring what the user sees needs both. Stored in client format,
+ * exactly as the store holds it, so nothing is reinterpreted on the way back.
+ */
+const PENDING_DIFF_KEY = 'pendingDiff'
+/** Bump to ignore everything written by an older format. */
+const PENDING_DIFF_VERSION = 1
+
 function convertZmToLocal(diff: TZmDiff) {
   return convertDiff.toClient(diff)
+}
+
+async function getPendingDiff(): Promise<TDiff | null> {
+  const stored = await storage.get(PENDING_DIFF_KEY)
+  if (!stored || stored.version !== PENDING_DIFF_VERSION) return null
+  return (stored.diff as TDiff) || null
+}
+
+async function savePendingDiff(diff?: TDiff) {
+  const value = diff ? { version: PENDING_DIFF_VERSION, diff } : null
+  return storage.set(PENDING_DIFF_KEY, value)
 }
 
 async function sync(
@@ -50,6 +73,8 @@ async function getLocalData() {
 const obj = {
   convertZmToLocal,
   getLocalData,
+  getPendingDiff,
+  savePendingDiff,
   clearStorage: () => storage.clear(),
   saveLocalData: (data: TLocalData) => {
     keys(data).forEach(key => storage.set(key, data[key]))
