@@ -1,6 +1,6 @@
 import type { TTransaction, TTransactionId } from '6-shared/types'
 
-import React, { useState, useEffect, FC } from 'react'
+import React, { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Box,
@@ -40,6 +40,7 @@ import { RuleModal } from '4-features/transactionRules'
 
 import { Reciept } from './Reciept'
 import { Map } from './Map'
+import { useTransactionDraft } from './useTransactionDraft'
 
 /**
  * Empty state for transaction preview
@@ -94,63 +95,22 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
   const incomeCurrency = instruments[tr.incomeInstrument]?.shortTitle
   const outcomeCurrency = instruments[tr.outcomeInstrument]?.shortTitle
 
-  const {
-    date,
-    changed,
-    created,
-    deleted,
-    qrCode,
-    income,
-    outcome,
-    tag,
-    comment,
-    payee,
-    latitude,
-    longitude,
-    mcc,
-  } = tr
+  const { changed, created, deleted, qrCode, latitude, longitude, mcc } = tr
 
-  const [localComment, setLocalComment] = useState(tr.comment)
-  const [localOutcome, setLocalOutcome] = useState(tr.outcome)
-  const [localIncome, setLocalIncome] = useState(tr.income)
-  const [localPayee, setLocalPayee] = useState(tr.payee)
-  const [localDate, setLocalDate] = useState(tr.date)
-  const [localTime, setLocalTime] = useState(formatDate(tr.created, 'HH:mm'))
-  const [localTag, setLocalTag] = useState(tr.tag)
   const [isRuleOpen, toggleRuleOpen] = useToggle()
   // Categories only make sense for income and outcome, and so do rules.
   const canHaveRule = trType === 'income' || trType === 'outcome'
 
-  useEffect(() => {
-    setLocalComment(tr.comment)
-    setLocalOutcome(tr.outcome)
-    setLocalIncome(tr.income)
-    setLocalPayee(tr.payee)
-    setLocalDate(tr.date)
-    setLocalTime(formatDate(tr.created, 'HH:mm'))
-    setLocalTag(tr.tag)
-  }, [tr])
-
-  const timeChanged = formatDate(tr.created, 'HH:mm') !== localTime
-
-  const hasChanges =
-    comment !== localComment ||
-    outcome !== localOutcome ||
-    income !== localIncome ||
-    payee !== localPayee ||
-    date !== localDate ||
-    localTag !== tag ||
-    timeChanged
-
   // A category set by hand outranks the rules, and they are told so at the
-  // moment it happens — guessing it later from a mismatch cannot tell a
-  // person from the server
-  const tagChanged = localTag !== tag
+  // moment it happens (`tagChanged` below) — guessing it later from a
+  // mismatch cannot tell a person from the server
+  const { draft, patchDraft, hasChanges, timeChanged, tagChanged } =
+    useTransactionDraft(tr)
 
   const onSave = () => {
     if (timeChanged) {
-      const hh = +localTime.split(':')[0]
-      const mm = +localTime.split(':')[1]
+      const hh = +draft.time.split(':')[0]
+      const mm = +draft.time.split(':')[1]
       let createdDate = parseDate(tr.date)
       createdDate.setHours(hh)
       createdDate.setMinutes(mm)
@@ -158,12 +118,12 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
         trModel.recreateTransaction({
           id,
           created: +createdDate,
-          comment: localComment,
-          outcome: localOutcome,
-          income: localIncome,
-          payee: localPayee,
-          date: localDate,
-          tag: localTag,
+          comment: draft.comment,
+          outcome: draft.outcome,
+          income: draft.income,
+          payee: draft.payee,
+          date: draft.date,
+          tag: draft.tag,
         })
       ) as unknown
       if (tagChanged) dispatch(ruleModel.excludeFromRules([newId as string]))
@@ -172,12 +132,12 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
       dispatch(
         trModel.applyChangesToTransaction({
           id,
-          comment: localComment,
-          outcome: localOutcome,
-          income: localIncome,
-          payee: localPayee,
-          date: localDate,
-          tag: localTag,
+          comment: draft.comment,
+          outcome: draft.outcome,
+          income: draft.income,
+          payee: draft.payee,
+          date: draft.date,
+          tag: draft.tag,
         })
       )
       if (tagChanged) dispatch(ruleModel.excludeFromRules([id]))
@@ -210,8 +170,8 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
       />
       {(trType === 'income' || trType === 'outcome') && (
         <TagList
-          tags={localTag}
-          onChange={setLocalTag}
+          tags={draft.tag}
+          onChange={tag => patchDraft({ tag })}
           tagType={trType}
           px={3}
           py={2}
@@ -233,8 +193,8 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
             <AmountInput
               label={t('amountOutcome')}
               currency={outcomeCurrency}
-              value={localOutcome}
-              onChange={setLocalOutcome}
+              value={draft.outcome}
+              onChange={outcome => patchDraft({ outcome })}
               selectOnFocus
               fullWidth
               size="small"
@@ -247,8 +207,8 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
             <AmountInput
               label={t('amountIncome')}
               currency={incomeCurrency}
-              value={localIncome}
-              onChange={setLocalIncome}
+              value={draft.income}
+              onChange={income => patchDraft({ income })}
               selectOnFocus
               fullWidth
               size="small"
@@ -258,8 +218,8 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
         <Stack direction="row" spacing={2}>
           <DatePicker
             label={t('date')}
-            value={parseDate(localDate)}
-            onChange={date => date && setLocalDate(toISODate(date))}
+            value={parseDate(draft.date)}
+            onChange={date => date && patchDraft({ date: toISODate(date) })}
             showDaysOutsideCurrentMonth
             format="dd.MM.yyyy"
             slotProps={{ textField: { size: 'small', fullWidth: true } }}
@@ -267,8 +227,8 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
           />
           <TextField
             label={t('time')}
-            value={localTime}
-            onChange={e => setLocalTime(e.target.value)}
+            value={draft.time}
+            onChange={e => patchDraft({ time: e.target.value })}
             type="time"
             size="small"
             sx={{ minWidth: 104 }}
@@ -284,8 +244,8 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
         </Stack>
         <TextField
           label={t('payee')}
-          value={localPayee || ''}
-          onChange={e => setLocalPayee(e.target.value)}
+          value={draft.payee || ''}
+          onChange={e => patchDraft({ payee: e.target.value })}
           multiline
           maxRows="4"
           fullWidth
@@ -294,8 +254,8 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
         />
         <TextField
           label={t('comment')}
-          value={localComment || ''}
-          onChange={e => setLocalComment(e.target.value)}
+          value={draft.comment || ''}
+          onChange={e => patchDraft({ comment: e.target.value })}
           multiline
           maxRows="4"
           fullWidth
@@ -337,7 +297,7 @@ const TransactionContent: FC<TransactionPreviewProps> = props => {
           open={isRuleOpen}
           onClose={toggleRuleOpen}
           seedTransaction={tr}
-          seedTags={localTag || []}
+          seedTags={draft.tag || []}
         />
       )}
     </Box>
