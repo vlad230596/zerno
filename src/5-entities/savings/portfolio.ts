@@ -31,6 +31,7 @@ import {
   getEffectiveRate,
   getMinBalancePeriod,
   getOnEnd,
+  getPeriodSpec,
   getPeriodMin,
   isEligible,
   limitStatus,
@@ -116,7 +117,7 @@ export function buildAccount(
   let periodMin: TSavingsAccount['periodMin'] = null
   let income = monthlyIncome(displayBalance, rate)
   if (kind === 'minBalance') {
-    period = getMinBalancePeriod(meta?.periodStartDay, today)
+    period = getMinBalancePeriod(getPeriodSpec(meta), today)
     const h = getHistory?.(account.id, account.fxCode)
     const min = h
       ? getPeriodMin(h.history, h.before, account.balance, period.start, today)

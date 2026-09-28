@@ -7,7 +7,7 @@ import {
   HiddenDataType,
   makeSimpleHiddenStore,
 } from '5-entities/shared/hidden-store'
-import { DEFAULT_LIMIT } from './calc'
+import { DEFAULT_LIMIT, isValidPeriod } from './calc'
 
 export const savingsStore = makeSimpleHiddenStore<TSavingsData>(
   HiddenDataType.Savings,
@@ -22,14 +22,31 @@ export const getSavingsData: TSelector<TSavingsData> = createSelector(
 
 export function normalizeData(raw: unknown): TSavingsData {
   const data = (raw && typeof raw === 'object' ? raw : {}) as TSavingsData
-  const accounts =
-    data.accounts && typeof data.accounts === 'object' ? data.accounts : {}
+  const accounts = normalizeAccounts(data.accounts)
   const result: TSavingsData = { accounts }
   if (typeof data.limit === 'number' && data.limit > 0)
     result.limit = data.limit
   if (data.userNames && typeof data.userNames === 'object') {
     result.userNames = data.userNames
   }
+  return result
+}
+
+/** Drops a malformed `period`: the account falls back to the default then */
+function normalizeAccounts(raw: unknown): TSavingsData['accounts'] {
+  if (!raw || typeof raw !== 'object') return {}
+  const accounts = raw as TSavingsData['accounts']
+  const broken = Object.keys(accounts).filter(id => {
+    const meta = accounts[id]
+    return meta && 'period' in meta && !isValidPeriod(meta.period)
+  })
+  if (!broken.length) return accounts
+  const result = { ...accounts }
+  broken.forEach(id => {
+    const meta = { ...result[id] }
+    delete meta.period
+    result[id] = meta
+  })
   return result
 }
 

@@ -9,12 +9,15 @@ import {
   getEffectiveRate,
   getMinBalancePeriod,
   getPeriodMin,
+  getPeriodSpec,
   isEligible,
   isInPortfolio,
+  isValidPeriod,
   limitStatus,
   monthlyIncome,
   nextEvent,
 } from './calc'
+import type { TSavingsPeriod } from './types'
 import { d, makeAcc } from './testHelpers'
 
 describe('classify', () => {
@@ -151,32 +154,128 @@ describe('getDepositTerm', () => {
 })
 
 describe('getMinBalancePeriod', () => {
+  const legacy = (day: number) => getPeriodSpec({ periodStartDay: day })
+  const every = (
+    count: number,
+    unit: 'day' | 'week' | 'month',
+    anchor: string
+  ) => ({ anchor: d(anchor), count, unit })
+
   it('defaults to the calendar month', () => {
-    expect(getMinBalancePeriod(undefined, d('2026-09-29'))).toEqual({
+    const expected = {
       start: '2026-09-01',
       nextStart: '2026-10-01',
       end: '2026-09-30',
+    }
+    expect(getMinBalancePeriod(undefined, d('2026-09-29'))).toEqual(expected)
+    expect(getMinBalancePeriod(getPeriodSpec({}), d('2026-09-29'))).toEqual(
+      expected
+    )
+  })
+
+  describe('legacy periodStartDay', () => {
+    it('starts in the previous month before the start day', () => {
+      expect(getMinBalancePeriod(legacy(15), d('2026-09-10'))).toEqual({
+        start: '2026-08-15',
+        nextStart: '2026-09-15',
+        end: '2026-09-14',
+      })
+      expect(getMinBalancePeriod(legacy(15), d('2026-09-15')).start).toBe(
+        '2026-09-15'
+      )
+    })
+    it('clamps to the last day of short months', () => {
+      expect(getMinBalancePeriod(legacy(31), d('2026-02-28'))).toEqual({
+        start: '2026-02-28',
+        nextStart: '2026-03-31',
+        end: '2026-03-30',
+      })
+      expect(getMinBalancePeriod(legacy(31), d('2026-02-27'))).toEqual({
+        start: '2026-01-31',
+        nextStart: '2026-02-28',
+        end: '2026-02-27',
+      })
+    })
+    it('loses to a stored period', () => {
+      const period = every(14, 'day', '2026-09-01')
+      expect(getPeriodSpec({ periodStartDay: 15, period })).toEqual(period)
     })
   })
-  it('starts in the previous month before the start day', () => {
-    expect(getMinBalancePeriod(15, d('2026-09-10'))).toEqual({
-      start: '2026-08-15',
-      nextStart: '2026-09-15',
-      end: '2026-09-14',
+
+  it('steps by days from the anchor', () => {
+    const spec = every(14, 'day', '2026-09-01')
+    expect(getMinBalancePeriod(spec, d('2026-09-28'))).toEqual({
+      start: '2026-09-15',
+      nextStart: '2026-09-29',
+      end: '2026-09-28',
     })
-    expect(getMinBalancePeriod(15, d('2026-09-15')).start).toBe('2026-09-15')
+    expect(getMinBalancePeriod(spec, d('2026-09-29')).start).toBe('2026-09-29')
+    // Far from the anchor, across a year boundary
+    expect(getMinBalancePeriod(spec, d('2027-01-01')).start).toBe('2026-12-22')
   })
-  it('clamps to the last day of short months', () => {
-    expect(getMinBalancePeriod(31, d('2026-02-28'))).toEqual({
+
+  it('steps by weeks', () => {
+    const spec = every(2, 'week', '2026-01-05')
+    expect(getMinBalancePeriod(spec, d('2026-09-29'))).toEqual({
+      start: '2026-09-28',
+      nextStart: '2026-10-12',
+      end: '2026-10-11',
+    })
+  })
+
+  it('steps by several months', () => {
+    const spec = every(3, 'month', '2026-01-10')
+    expect(getMinBalancePeriod(spec, d('2026-09-29'))).toEqual({
+      start: '2026-07-10',
+      nextStart: '2026-10-10',
+      end: '2026-10-09',
+    })
+    expect(getMinBalancePeriod(spec, d('2026-07-09')).start).toBe('2026-04-10')
+  })
+
+  it('works back from an anchor in the future', () => {
+    expect(
+      getMinBalancePeriod(every(10, 'day', '2026-10-15'), d('2026-09-29'))
+    ).toEqual({
+      start: '2026-09-25',
+      nextStart: '2026-10-05',
+      end: '2026-10-04',
+    })
+    expect(
+      getMinBalancePeriod(every(1, 'month', '2027-01-31'), d('2026-09-29'))
+    ).toEqual({
+      start: '2026-08-31',
+      nextStart: '2026-09-30',
+      end: '2026-09-29',
+    })
+  })
+
+  it('clamps month ends without drifting', () => {
+    const spec = every(1, 'month', '2026-01-31')
+    expect(getMinBalancePeriod(spec, d('2026-03-15'))).toEqual({
       start: '2026-02-28',
       nextStart: '2026-03-31',
       end: '2026-03-30',
     })
-    expect(getMinBalancePeriod(31, d('2026-02-27'))).toEqual({
-      start: '2026-01-31',
-      nextStart: '2026-02-28',
-      end: '2026-02-27',
-    })
+    expect(getMinBalancePeriod(spec, d('2026-05-01')).start).toBe('2026-04-30')
+    expect(getMinBalancePeriod(spec, d('2026-05-31')).start).toBe('2026-05-31')
+  })
+
+  it('ignores a malformed period', () => {
+    for (const period of [
+      { anchor: d('2026-09-01'), count: 0, unit: 'day' },
+      { anchor: d('2026-09-01'), count: 1.5, unit: 'day' },
+      { anchor: d('2026-09-01'), count: 3651, unit: 'day' },
+      { anchor: d('2026-09-01'), count: 1, unit: 'year' },
+      { anchor: d('2026-02-30'), count: 1, unit: 'day' },
+      { anchor: d('01.09.2026'), count: 1, unit: 'day' },
+    ]) {
+      expect(isValidPeriod(period)).toBe(false)
+      expect(
+        getPeriodSpec({ period: period as TSavingsPeriod, periodStartDay: 15 })
+      ).toEqual(legacy(15))
+    }
+    expect(isValidPeriod(every(3650, 'day', '2026-09-01'))).toBe(true)
   })
 })
 
@@ -330,6 +429,17 @@ describe('nextEvent', () => {
       type: 'periodEnd',
       date: '2026-10-15',
       daysLeft: 16,
+    })
+  })
+  it('follows a stored period', () => {
+    const meta = {
+      kind: 'minBalance' as const,
+      period: { anchor: d('2026-09-01'), count: 14, unit: 'day' as const },
+    }
+    expect(nextEvent(makeAcc(), meta, d('2026-09-20'))).toEqual({
+      type: 'periodEnd',
+      date: '2026-09-29',
+      daysLeft: 9,
     })
   })
   it('is the promo end for daily, nothing without promo', () => {

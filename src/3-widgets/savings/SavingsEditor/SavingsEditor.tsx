@@ -1,5 +1,9 @@
 import type { TAccountId, TCompany, TUserId } from '6-shared/types'
-import type { TSavingsKind, TSavingsOnEnd } from '5-entities/savings'
+import type {
+  TSavingsKind,
+  TSavingsOnEnd,
+  TSavingsPeriodUnit,
+} from '5-entities/savings'
 import type { TEditorErrors, TEditorForm, TTermUnit } from './form'
 
 import React, { FC, useCallback, useMemo, useState } from 'react'
@@ -36,17 +40,19 @@ import { userModel } from '5-entities/user'
 import { savingsModel } from '5-entities/savings'
 import {
   buildSavePatch,
+  getFormPeriod,
   getFormTermEnd,
   hasPromo,
   hasRate,
   initForm,
+  setFormTermEnd,
   validateForm,
 } from './form'
 
 const KINDS: TSavingsKind[] = ['none', 'daily', 'minBalance', 'deposit']
 const TERM_UNITS: TTermUnit[] = ['day', 'week', 'month', 'year']
 const ON_END: TSavingsOnEnd[] = ['prolong', 'payout', 'unknown']
-const DAYS = Array.from({ length: 31 }, (_, i) => i + 1)
+const PERIOD_UNITS: TSavingsPeriodUnit[] = savingsModel.PERIOD_UNITS
 
 const editorPopover = registerPopover<{ id: TAccountId }>('savingsEditor', {
   id: '',
@@ -94,7 +100,7 @@ const EditorContent: FC<{ id: TAccountId; onClose: () => void }> = props => {
   const today = savingsModel.useToday()
 
   const [form, setForm] = useState<TEditorForm | null>(() =>
-    account ? initForm(account, meta) : null
+    account ? initForm(account, meta, today) : null
   )
   const patch = useCallback(
     (p: Partial<TEditorForm>) => setForm(f => (f ? { ...f, ...p } : f)),
@@ -157,10 +163,7 @@ const EditorContent: FC<{ id: TAccountId; onClose: () => void }> = props => {
     onClose()
   }
 
-  const period =
-    kind === 'minBalance'
-      ? savingsModel.getMinBalancePeriod(form.periodStartDay, today)
-      : null
+  const period = kind === 'minBalance' ? getFormPeriod(form, today) : null
   const termEnd = kind === 'deposit' ? getFormTermEnd(form) : null
 
   return (
@@ -273,29 +276,61 @@ const EditorContent: FC<{ id: TAccountId; onClose: () => void }> = props => {
             />
           )}
 
-          {/* Period start */}
-          {kind === 'minBalance' && period && (
-            <TextField
-              select
-              label={t('periodStartDay')}
-              value={form.periodStartDay}
-              onChange={e => patch({ periodStartDay: Number(e.target.value) })}
-              error={!!errors.periodStartDay}
-              helperText={
-                errorText('periodStartDay') ||
-                t('periodHelper', {
-                  start: formatDate(period.start, shortFormat),
-                  end: formatDate(period.end, shortFormat),
-                  next: formatDate(period.nextStart, shortFormat),
-                })
-              }
-            >
-              {DAYS.map(day => (
-                <MenuItem key={day} value={day}>
-                  {t('dayOfMonth', { day })}
-                </MenuItem>
-              ))}
-            </TextField>
+          {/* Period */}
+          {kind === 'minBalance' && (
+            <Stack spacing={1}>
+              <Stack direction="row" spacing={1}>
+                <TextField
+                  label={t('periodCount')}
+                  value={form.periodCount}
+                  onChange={e => patch({ periodCount: e.target.value })}
+                  error={!!errors.periodCount}
+                  helperText={errorText('periodCount')}
+                  slotProps={{ htmlInput: { inputMode: 'numeric' } }}
+                  sx={{ flex: 1 }}
+                />
+                <TextField
+                  select
+                  label={t('termUnit')}
+                  value={form.periodUnit}
+                  onChange={e =>
+                    patch({ periodUnit: e.target.value as TSavingsPeriodUnit })
+                  }
+                  sx={{ flex: 1 }}
+                >
+                  {PERIOD_UNITS.map(unit => (
+                    <MenuItem key={unit} value={unit}>
+                      {t(`units.${unit}`)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Stack>
+              <DatePicker
+                label={t('periodAnchor')}
+                value={form.periodAnchor ? parseDate(form.periodAnchor) : null}
+                onChange={date => {
+                  if (date && !isValid(date)) return
+                  patch({ periodAnchor: date ? toISODate(date) : null })
+                }}
+                format="dd.MM.yyyy"
+                slots={{ openPickerIcon: CalendarIcon }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    error: !!errors.periodAnchor,
+                    helperText:
+                      errorText('periodAnchor') ||
+                      (period
+                        ? t('periodHelper', {
+                            start: formatDate(period.start, shortFormat),
+                            end: formatDate(period.end, shortFormat),
+                            next: formatDate(period.nextStart, shortFormat),
+                          })
+                        : undefined),
+                  },
+                }}
+              />
+            </Stack>
           )}
 
           {/* Promo */}
@@ -410,12 +445,7 @@ const EditorContent: FC<{ id: TAccountId; onClose: () => void }> = props => {
                   value={form.termCount}
                   onChange={e => patch({ termCount: e.target.value })}
                   error={!!errors.term}
-                  helperText={
-                    errorText('term') ||
-                    (termEnd
-                      ? t('termEnd', { date: formatDate(termEnd, dateFormat) })
-                      : undefined)
-                  }
+                  helperText={errorText('term')}
                   slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                   sx={{ flex: 1 }}
                 />
@@ -435,6 +465,28 @@ const EditorContent: FC<{ id: TAccountId; onClose: () => void }> = props => {
                   ))}
                 </TextField>
               </Stack>
+
+              {/* Linked with the term: picking it sets the term in days */}
+              <DatePicker
+                label={t('endDate')}
+                value={termEnd ? parseDate(termEnd) : null}
+                onChange={date => {
+                  if (date && !isValid(date)) return
+                  patch(setFormTermEnd(form, date ? toISODate(date) : null))
+                }}
+                disabled={!form.startDate}
+                format="dd.MM.yyyy"
+                slots={{ openPickerIcon: CalendarIcon }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    error: !!errors.endDate,
+                    helperText: form.startDate
+                      ? errorText('endDate') || t('endDateHelper')
+                      : t('endDateNeedsStart'),
+                  },
+                }}
+              />
 
               <Box>
                 <Typography

@@ -8,8 +8,9 @@
  *   `isBroken`. Every amount is in the display currency (`currency`) except
  *   `TSavingsAccount.balance`, which is in the account's own.
  *
- * Edit what ZenMoney has no fields for (kind, bank / owner override, period
- * day, promo, prolongation, confirmed rate, exclusion; limit; people's names):
+ * Edit what ZenMoney has no fields for (kind, bank / owner override,
+ * `minBalance` period — `period`, legacy `periodStartDay` — promo,
+ * prolongation, confirmed rate, exclusion; limit; people's names):
  * - `setSavingsMeta(accountId, patch)` — merges, `undefined` removes a key;
  * - `setSavingsLimit(limit | undefined)`, `setUserName(userId, name | undefined)`.
  * Standard fields (percent, dates, capitalization, company) go through
@@ -24,7 +25,10 @@ import type { TAccountId } from '6-shared/types'
 import { useAppSelector } from 'store'
 import {
   DEFAULT_LIMIT,
+  DEFAULT_PERIOD,
   LIMIT_WARN_MARGIN,
+  MAX_PERIOD_COUNT,
+  PERIOD_UNITS,
   addInterval,
   classify,
   daysBetween,
@@ -33,9 +37,11 @@ import {
   getEffectiveRate,
   getMinBalancePeriod,
   getPeriodMin,
+  getPeriodSpec,
   isEligible,
   isInPortfolio,
   isPromoActive,
+  isValidPeriod,
   limitStatus,
   monthlyIncome,
   nextEvent,
@@ -67,6 +73,8 @@ export type {
   TSavingsNextEvent,
   TSavingsOnEnd,
   TSavingsOwnerGroup,
+  TSavingsPeriod,
+  TSavingsPeriodUnit,
   TSavingsPortfolio,
   TSavingsPromo,
   TSavingsSummary,
@@ -108,6 +116,8 @@ export const savingsModel = {
   getOwnerName,
   getDepositTerm,
   getMinBalancePeriod,
+  getPeriodSpec,
+  isValidPeriod,
   getPeriodMin,
   getEffectiveRate,
   isPromoActive,
@@ -120,5 +130,8 @@ export const savingsModel = {
 
   // Constants
   DEFAULT_LIMIT,
+  DEFAULT_PERIOD,
   LIMIT_WARN_MARGIN,
+  MAX_PERIOD_COUNT,
+  PERIOD_UNITS,
 }

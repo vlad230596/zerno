@@ -29,6 +29,21 @@ export type TSavingsPromo = {
   after?: number
 }
 
+export type TSavingsPeriodUnit = 'day' | 'week' | 'month'
+
+/**
+ * How a `minBalance` period repeats: every `count` × `unit`, one of the
+ * periods starting on `anchor` (past or future). Month steps are taken from
+ * the anchor and clamp to shorter months: an anchor on the 31st starts on
+ * 28 Feb, then on 31 Mar.
+ */
+export type TSavingsPeriod = {
+  anchor: TISODate
+  /** Positive integer, at most `MAX_PERIOD_COUNT` */
+  count: number
+  unit: TSavingsPeriodUnit
+}
+
 /**
  * What the user told us about an account, on top of the ZenMoney fields.
  *
@@ -42,7 +57,13 @@ export type TSavingsMeta = {
   bank?: TCompanyId | null
   /** Overrides `account.user` — in a family it may point at the wrong person */
   owner?: TUserId
-  /** 1..31, the day a `minBalance` period starts. Clamped in short months. */
+  /** The `minBalance` period. Wins over `periodStartDay`. */
+  period?: TSavingsPeriod
+  /**
+   * Legacy: 1..31, the day a monthly `minBalance` period starts, clamped in
+   * short months. Still read when `period` is missing; the editor replaces
+   * it with `period` on save.
+   */
   periodStartDay?: number
   /**
    * Rate of a `daily` / `minBalance` account. ZenMoney keeps `percent` only on

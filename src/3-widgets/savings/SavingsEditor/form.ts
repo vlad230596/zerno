@@ -2,12 +2,16 @@
 // patches one "Save" writes. No React, no store — covered by `form.test.ts`.
 import type { TAccount, TCompanyId, TISODate, TUserId } from '6-shared/types'
 import type {
+  TMinBalancePeriod,
   TSavingsKind,
   TSavingsMeta,
   TSavingsOnEnd,
+  TSavingsPeriod,
+  TSavingsPeriodUnit,
 } from '5-entities/savings'
 
 import { AccountType } from '6-shared/types'
+import { parseDate, toISODate } from '6-shared/helpers/date'
 import { savingsModel } from '5-entities/savings'
 
 export type TTermUnit = NonNullable<TAccount['endDateOffsetInterval']>
@@ -18,7 +22,10 @@ export type TEditorForm = {
   bank: TCompanyId | null
   owner: TUserId
   rate: string
-  periodStartDay: number
+  /** `minBalance` period: every `periodCount` × `periodUnit` from the anchor */
+  periodCount: string
+  periodUnit: TSavingsPeriodUnit
+  periodAnchor: TISODate | null
   promoEnabled: boolean
   promoRate: string
   promoUntil: TISODate | null
@@ -36,12 +43,14 @@ export type TEditorForm = {
 export type TEditorErrors = Partial<
   Record<
     | 'rate'
-    | 'periodStartDay'
+    | 'periodCount'
+    | 'periodAnchor'
     | 'promoRate'
     | 'promoUntil'
     | 'promoAfter'
-    | 'term',
-    'required' | 'range' | 'incomplete'
+    | 'term'
+    | 'endDate',
+    'required' | 'range' | 'incomplete' | 'endBeforeStart'
   >
 >
 
@@ -85,11 +94,39 @@ export function parseNumber(value: string): number | null {
 const numToStr = (n: number | null | undefined) =>
   n === null || n === undefined ? '' : String(n)
 
+/**
+ * The latest `day` of a month on or before `today`, skipping months too short
+ * for it: the anchor of a legacy monthly period (`periodStartDay`).
+ */
+function legacyAnchor(day: number, today: TISODate): TISODate {
+  const t = parseDate(today)
+  for (let back = 0; back < 24; back++) {
+    const date = new Date(t.getFullYear(), t.getMonth() - back, day)
+    if (date.getDate() === day && toISODate(date) <= today) {
+      return toISODate(date)
+    }
+  }
+  return toISODate(new Date(t.getFullYear(), t.getMonth(), 1))
+}
+
+/** The period as the form shows it: stored, else legacy, else from the 1st */
+function initPeriod(meta: TSavingsMeta, today: TISODate): TSavingsPeriod {
+  if (savingsModel.isValidPeriod(meta.period)) return meta.period
+  const legacy = meta.periodStartDay
+  const day =
+    typeof legacy === 'number' && legacy >= 1
+      ? Math.min(31, Math.round(legacy))
+      : 1
+  return { anchor: legacyAnchor(day, today), count: 1, unit: 'month' }
+}
+
 export function initForm(
   account: TEditableAccount,
-  meta: TSavingsMeta
+  meta: TSavingsMeta,
+  today: TISODate
 ): TEditorForm {
   const { kind } = savingsModel.classify(account, meta)
+  const period = initPeriod(meta, today)
   return {
     kind,
     bank: savingsModel.getBankId(account, meta),
@@ -97,7 +134,9 @@ export function initForm(
     rate: numToStr(
       kind === 'deposit' ? account.percent : (meta.rate ?? account.percent)
     ),
-    periodStartDay: meta.periodStartDay ?? 1,
+    periodCount: String(period.count),
+    periodUnit: period.unit,
+    periodAnchor: period.anchor,
     promoEnabled: !!meta.promo,
     promoRate: numToStr(meta.promo?.rate),
     promoUntil: meta.promo?.until ?? null,
@@ -123,10 +162,16 @@ export function validateForm(form: TEditorForm): TEditorErrors {
     else if (!isRate(rate)) errors.rate = 'range'
   }
   if (kind === 'minBalance') {
-    const day = form.periodStartDay
-    if (!Number.isInteger(day) || day < 1 || day > 31) {
-      errors.periodStartDay = 'range'
+    const count = parseNumber(form.periodCount)
+    if (count === null) errors.periodCount = 'required'
+    else if (
+      !Number.isInteger(count) ||
+      count < 1 ||
+      count > savingsModel.MAX_PERIOD_COUNT
+    ) {
+      errors.periodCount = 'range'
     }
+    if (!form.periodAnchor) errors.periodAnchor = 'required'
   }
   if (hasPromo(kind) && form.promoEnabled) {
     const promoRate = parseNumber(form.promoRate)
@@ -140,6 +185,10 @@ export function validateForm(form: TEditorForm): TEditorErrors {
     const count = parseNumber(form.termCount)
     if (count !== null && (!Number.isInteger(count) || count <= 0)) {
       errors.term = 'range'
+      // Set from the end date: it is the end that is wrong
+      if (form.startDate && Number.isInteger(count)) {
+        errors.endDate = 'endBeforeStart'
+      }
     } else if ((count === null) !== !form.startDate) {
       // A term needs both the start and the length, or neither
       errors.term = 'incomplete'
@@ -151,13 +200,52 @@ export function validateForm(form: TEditorForm): TEditorErrors {
 export const isFormValid = (form: TEditorForm) =>
   Object.keys(validateForm(form)).length === 0
 
-/** End of the first term as entered, or null when the term is incomplete */
+/**
+ * End of the first term as entered, or null when the term is incomplete.
+ * A term of zero or fewer units still gives a date — the end the user picked
+ * before the start — so the end field keeps showing it next to the error.
+ */
 export function getFormTermEnd(form: TEditorForm): TISODate | null {
   const count = parseNumber(form.termCount)
-  if (!form.startDate || !count || !Number.isInteger(count) || count <= 0) {
+  if (!form.startDate || count === null || !Number.isInteger(count)) {
     return null
   }
   return savingsModel.addInterval(form.startDate, count, form.termUnit)
+}
+
+/**
+ * The form change of picking the end date: the term becomes the exact number
+ * of days from the start, as banks count it, and that is what gets written to
+ * ZenMoney. No start — nothing to count from, nothing changes.
+ */
+export function setFormTermEnd(
+  form: TEditorForm,
+  end: TISODate | null
+): Partial<TEditorForm> {
+  if (!form.startDate) return {}
+  if (!end) return { termCount: '' }
+  return {
+    termCount: String(savingsModel.daysBetween(form.startDate, end)),
+    termUnit: 'day',
+  }
+}
+
+/** The `minBalance` period containing today as entered, null when invalid */
+export function getFormPeriod(
+  form: TEditorForm,
+  today: TISODate
+): TMinBalancePeriod | null {
+  const period = getFormPeriodSpec(form)
+  return period ? savingsModel.getMinBalancePeriod(period, today) : null
+}
+
+function getFormPeriodSpec(form: TEditorForm): TSavingsPeriod | null {
+  const period = {
+    anchor: form.periodAnchor,
+    count: parseNumber(form.periodCount),
+    unit: form.periodUnit,
+  }
+  return savingsModel.isValidPeriod(period) ? period : null
 }
 
 /**
@@ -233,8 +321,10 @@ export function buildSavePatch(
       ? validRate
       : undefined
 
-  metaPatch.periodStartDay =
-    kind === 'minBalance' ? form.periodStartDay : undefined
+  // The legacy day is replaced by `period` on every save
+  metaPatch.period =
+    kind === 'minBalance' ? (getFormPeriodSpec(form) ?? undefined) : undefined
+  metaPatch.periodStartDay = undefined
 
   if (hasPromo(kind) && form.promoEnabled && form.promoUntil) {
     const after = parseNumber(form.promoAfter)

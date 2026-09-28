@@ -350,19 +350,30 @@ function getConditions(
       }
       if (a.kind === 'daily' || short) return head
       const parts = [promo ? head : t('onMinimum', { rate })]
-      const day =
-        a.meta.periodStartDay ?? (a.period ? dayOf(a.period.start) : null)
-      if (day) parts.push(t('periodFrom', { day }))
+      parts.push(getPeriodText(a, t))
       return parts.join(' · ')
     }
   }
 }
 
-/** Deposit term length: "6 мес", or days for short ones */
+/** "период с 15-го" for a monthly period, else "период 14 дней" */
+function getPeriodText(a: TSavingsAccount, t: TFunction<'savings'>): string {
+  const { anchor, count, unit } = savingsModel.getPeriodSpec(a.meta)
+  if (unit === 'month' && count === 1) {
+    return t('periodFrom', { day: dayOf(anchor) })
+  }
+  if (unit === 'week') return t('periodWeeks', { count })
+  if (unit === 'month') return t('periodMonths', { count })
+  return t('periodDays', { count })
+}
+
+/** Deposit term length: "6 мес", or days when it is not whole months */
 function getTerm(a: TSavingsAccount, t: TFunction<'savings'>): string {
   if (!a.deposit) return ''
   const { start, end } = a.deposit
   const months = differenceInCalendarMonths(end, start)
-  if (months >= 1) return t('termMonths', { count: months })
+  if (months >= 1 && savingsModel.addInterval(start, months, 'month') === end) {
+    return t('termMonths', { count: months })
+  }
   return t('days', { count: savingsModel.daysBetween(start, end) })
 }

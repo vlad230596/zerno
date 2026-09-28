@@ -201,6 +201,18 @@
     "rateUnknownAfterPromo": "{{rate}}% · ставка после промо неизвестна",
     "onMinimum": "{{rate}}% на минимум",
     "periodFrom": "период с {{day}}-го",
+    "periodDays_one": "период {{count}} день",
+    "periodDays_few": "период {{count}} дня",
+    "periodDays_many": "период {{count}} дней",
+    "periodDays_other": "период {{count}} дня",
+    "periodWeeks_one": "период {{count}} нед.",
+    "periodWeeks_few": "период {{count}} нед.",
+    "periodWeeks_many": "период {{count}} нед.",
+    "periodWeeks_other": "период {{count}} нед.",
+    "periodMonths_one": "период {{count}} мес.",
+    "periodMonths_few": "период {{count}} мес.",
+    "periodMonths_many": "период {{count}} мес.",
+    "periodMonths_other": "период {{count}} мес.",
     "termEnded": "срок закончился",
     "termMonths_one": "{{count}} мес",
     "termMonths_few": "{{count}} мес",
@@ -586,7 +598,7 @@
     "backgroundCheckError": {
       "unsupported": "Браузер не умеет будить приложение в фоне",
       "noPermission": "Без разрешения на уведомления проверка бесполезна",
-        "noToken": "Сначала войдите в Дзен-мани"
+      "noToken": "Сначала войдите в Дзен-мани"
     },
     "language": "Язык",
     "advancedSettings": "Расширенные настройки...",
@@ -774,7 +786,10 @@
     "kinds": {
       "none": { "title": "Без дохода", "hint": "наличные, дебетовая" },
       "daily": { "title": "Ежедневный", "hint": "% на остаток дня" },
-      "minBalance": { "title": "Мин. остаток", "hint": "% на минимум за период" },
+      "minBalance": {
+        "title": "Мин. остаток",
+        "hint": "% на минимум за период"
+      },
       "deposit": { "title": "Вклад", "hint": "срок и пролонгация" }
     },
     "guessed": "угадано — подтвердите",
@@ -783,8 +798,8 @@
     "noOptions": "Ничего не нашлось",
     "owner": "Владелец",
     "rate": "Ставка, % годовых",
-    "periodStartDay": "Расчётный период начинается",
-    "dayOfMonth": "{{day}}-го числа",
+    "periodCount": "Период начисления",
+    "periodAnchor": "Начало одного из периодов",
     "periodHelper": "Сейчас: {{start}} – {{end}}, следующий — с {{next}}",
     "promo": "Промо-ставка",
     "promoRate": "Промо, %",
@@ -795,10 +810,21 @@
     "startDate": "Дата открытия",
     "term": "Срок",
     "termUnit": "Единица",
-    "units": { "day": "дней", "week": "недель", "month": "месяцев", "year": "лет" },
-    "termEnd": "Окончание: {{date}}",
+    "units": {
+      "day": "дней",
+      "week": "недель",
+      "month": "месяцев",
+      "year": "лет"
+    },
+    "endDate": "Дата окончания",
+    "endDateHelper": "Как в приложении банка; срок станет точным числом дней",
+    "endDateNeedsStart": "Сначала укажите дату открытия",
     "onEnd": "После окончания",
-    "onEndOptions": { "prolong": "Пролонгация", "payout": "Выплата", "unknown": "Не знаю" },
+    "onEndOptions": {
+      "prolong": "Пролонгация",
+      "payout": "Выплата",
+      "unknown": "Не знаю"
+    },
     "capitalization": "Капитализация процентов",
     "rateCheckTitle": "Срок продлён — подтвердите ставку",
     "rateCheckText": "Новый срок начался {{date}}. Проверьте ставку выше.",
@@ -814,6 +840,7 @@
       "required": "Укажите значение",
       "range": "Недопустимое значение",
       "incomplete": "Укажите и дату открытия, и срок",
+      "endBeforeStart": "Окончание должно быть позже открытия",
       "positive": "Должен быть больше нуля"
     },
     "settingsTitle": "Настройки накоплений",

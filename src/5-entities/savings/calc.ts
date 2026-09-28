@@ -8,6 +8,8 @@ import type {
   TSavingsMeta,
   TSavingsNextEvent,
   TSavingsOnEnd,
+  TSavingsPeriod,
+  TSavingsPeriodUnit,
 } from './types'
 
 import {
@@ -179,31 +181,86 @@ export function getDepositTerm(
 // Minimum balance period
 // ---------------------------------------------------------------------------
 
-function clampedDay(year: number, month: number, day: number): Date {
-  const length = new Date(year, month + 1, 0).getDate()
-  return new Date(year, month, Math.min(day, length))
+export const PERIOD_UNITS: TSavingsPeriodUnit[] = ['day', 'week', 'month']
+/** Ten years in days — longer is surely a typo */
+export const MAX_PERIOD_COUNT = 3650
+
+/** Calendar month from the 1st: what a period is when nothing is stored */
+export const DEFAULT_PERIOD: TSavingsPeriod = {
+  // Any January 1st: month steps from it land on the 1st of every month
+  anchor: '2000-01-01' as TISODate,
+  count: 1,
+  unit: 'month',
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+export function isValidPeriod(value: unknown): value is TSavingsPeriod {
+  if (!value || typeof value !== 'object') return false
+  const { anchor, count, unit } = value as Record<string, unknown>
+  return (
+    typeof anchor === 'string' &&
+    ISO_DATE.test(anchor) &&
+    !Number.isNaN(parseDate(anchor as TISODate).getTime()) &&
+    typeof count === 'number' &&
+    Number.isInteger(count) &&
+    count >= 1 &&
+    count <= MAX_PERIOD_COUNT &&
+    PERIOD_UNITS.includes(unit as TSavingsPeriodUnit)
+  )
 }
 
 /**
- * The `minBalance` period containing `today`. It starts on `startDay` of a
- * month (the last day in months that are shorter) and lasts until the next
- * such day.
+ * The period spec of an account: `meta.period`, else the legacy monthly
+ * `periodStartDay`, else the calendar month.
+ */
+export function getPeriodSpec(meta: TSavingsMeta | undefined): TSavingsPeriod {
+  const period = meta?.period
+  if (isValidPeriod(period)) return period
+  const day = meta?.periodStartDay
+  if (typeof day === 'number' && day >= 1) {
+    const clamped = Math.min(31, Math.round(day))
+    // January has every day, and month steps from it clamp in shorter months
+    const dd = String(clamped).padStart(2, '0')
+    return { anchor: `2000-01-${dd}` as TISODate, count: 1, unit: 'month' }
+  }
+  return DEFAULT_PERIOD
+}
+
+/**
+ * The `minBalance` period containing `today`: periods follow each other every
+ * `count` × `unit` from the anchor, in both directions — the anchor may be
+ * after today. Every boundary is computed from the anchor, not from the
+ * previous boundary, so a clamped month end does not drift (31 Jan → 28 Feb
+ * → 31 Mar).
  */
 export function getMinBalancePeriod(
-  startDay: number | undefined,
+  spec: TSavingsPeriod | undefined,
   today: TISODate
 ): TMinBalancePeriod {
-  const day = Math.min(31, Math.max(1, Math.round(startDay || 1)))
-  const t = parseDate(today)
-  let start = clampedDay(t.getFullYear(), t.getMonth(), day)
-  if (toISODate(start) > today) {
-    start = clampedDay(t.getFullYear(), t.getMonth() - 1, day)
+  const { anchor, count, unit } = isValidPeriod(spec) ? spec : DEFAULT_PERIOD
+  const at = (k: number) => addInterval(anchor, k * count, unit)
+
+  // A close guess of the period number, then a step or two to settle it
+  let k: number
+  if (unit === 'month') {
+    const a = parseDate(anchor)
+    const t = parseDate(today)
+    const months =
+      (t.getFullYear() - a.getFullYear()) * 12 + t.getMonth() - a.getMonth()
+    k = Math.floor(months / count)
+  } else {
+    const length = unit === 'week' ? count * 7 : count
+    k = Math.floor(daysBetween(anchor, today) / length)
   }
-  const nextStart = clampedDay(start.getFullYear(), start.getMonth() + 1, day)
+  while (at(k) > today) k--
+  while (at(k + 1) <= today) k++
+
+  const nextStart = at(k + 1)
   return {
-    start: toISODate(start),
-    nextStart: toISODate(nextStart),
-    end: toISODate(addDays(nextStart, -1)),
+    start: at(k),
+    nextStart,
+    end: addInterval(nextStart, -1, 'day'),
   }
 }
 
@@ -339,7 +396,7 @@ export function nextEvent(
       candidates.push({ type: 'depositEnd', date: term.end })
   }
   if (kind === 'minBalance') {
-    const period = getMinBalancePeriod(meta?.periodStartDay, today)
+    const period = getMinBalancePeriod(getPeriodSpec(meta), today)
     candidates.push({ type: 'periodEnd', date: period.nextStart })
   }
   if ((kind === 'daily' || kind === 'minBalance') && meta?.promo) {
