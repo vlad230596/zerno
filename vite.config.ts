@@ -47,6 +47,11 @@ export default defineConfig({
       },
     }),
   ],
+  // `node deploy/push/server.mjs` with DATA_DIR and PORT=8787 stands in for
+  // the push service the production nginx proxies to. The worker only exists
+  // in a build, so `vite preview` is where push can actually be tried.
+  server: { proxy: { '/push': 'http://127.0.0.1:8787' } },
+  preview: { proxy: { '/push': 'http://127.0.0.1:8787' } },
   build: {
     outDir: 'dist',
     // Source maps ship readable sources, so they are opt-in: the development

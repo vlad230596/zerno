@@ -9,7 +9,8 @@ export const en: typeof ru = {
     btnDemoMode: 'Demo mode',
     btnTokenLogin: 'Sign in with a token',
     tokenLabel: 'Zenmoney token',
-    tokenHint: 'A token can be obtained from any already registered Zenmoney client',
+    tokenHint:
+      'A token can be obtained from any already registered Zenmoney client',
     btnTokenSubmit: 'Sign in',
     tokenChecking: 'Checking…',
     tokenEmpty: 'Paste a token',
@@ -512,22 +513,26 @@ export const en: typeof ru = {
     backgroundCheck: 'Background check (test)',
     backgroundCheckDescription:
       'Adds up the spending since the previous check and sends a notification',
+    backgroundCheckReachPush:
+      'An evening summary arrives even when the app is closed',
     backgroundCheckReachBackground:
       'Works in the background too: Chrome agreed to wake the app',
     backgroundCheckReachForeground:
       'Works while the app is running. Chrome did not grant background wake-ups',
-    backgroundCheckOn: 'On. Chrome will wake the app in the background too',
+    backgroundCheckOn:
+      'On. The evening summary will arrive even when the app is closed',
     backgroundCheckForegroundOnly:
-      'On, but only while the app is running. Chrome answered: {{reason}}',
+      'On, but only while the app is running. The evening alarm failed: {{reason}}',
     backgroundCheckNow: 'Check now',
     backgroundCheckDiagnose: 'Why are there no background notifications',
     backgroundCheckWhyNot:
-      'Chrome refused again and copied its answer to the clipboard: {{reason}}',
+      'The evening alarm failed again, the answer is copied to the clipboard: {{reason}}',
     backgroundCheckNoAnswer:
       'The worker did not answer — try reloading the page',
     backgroundCheckError: {
       unsupported: 'This browser cannot wake the app in the background',
-      noPermission: 'Without notification permission the check has nothing to show',
+      noPermission:
+        'Without notification permission the check has nothing to show',
       noToken: 'Sign in to ZenMoney first',
     },
     language: 'Language',

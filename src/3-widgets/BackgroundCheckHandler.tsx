@@ -2,7 +2,11 @@ import { FC, useEffect } from 'react'
 import { useAppSelector } from 'store'
 import { getLoginState } from 'store/token'
 import { readBackgroundState } from '6-shared/backgroundCheck'
-import { runNow, tryRegisterPeriodic } from '4-features/backgroundCheck'
+import {
+  runNow,
+  tryRegisterPeriodic,
+  trySubscribePush,
+} from '4-features/backgroundCheck'
 
 /**
  * How often the check runs while the application is alive. Chrome may never
@@ -38,6 +42,7 @@ export const BackgroundCheckHandler: FC<{}> = () => {
     const askForBackgroundWakeups = async () => {
       const state = await readBackgroundState()
       if (cancelled || !state?.token) return
+      await trySubscribePush()
       await tryRegisterPeriodic()
     }
     askForBackgroundWakeups()

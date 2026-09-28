@@ -114,11 +114,18 @@ osipxd/fix-month-list-start»).
 
 ## 8. Не код
 
-- [`ARCHITECTURE.md`](../ARCHITECTURE.md) — обзор проекта: стек, слои FSD,
+Вся документация форка лежит в `docs/`; в корне остались только `README.md` и
+`LICENSE`. Оглавление и статусы — в [README документации](./README.md).
+
+- [`architecture.md`](./architecture.md) — обзор проекта: стек, слои FSD,
   как устроены данные и синхронизация.
-- [`docs/features/`](./features) — проработка фич:
-  `auto-categorization.md` (реализовано) и `split-bill.md` (черновик: разделение
-  счёта на доли через механизм долгов).
+- [`deployment.md`](./deployment.md) — два стенда, ключи ZenMoney, CI/CD.
+- [`backlog.md`](./backlog.md) — что описано, но не сделано, одной таблицей.
+- [`known-issues.md`](./known-issues.md) — места, где терялись данные
+  пользователя, и что с ними сделано.
+- [`features/`](./features) — проработка фич: `auto-categorization.md`,
+  `composite-operations.md`, `ozon-import.md`, `notifications.md`,
+  `split-bill.md`.
 - `.claude/launch.json`, `scripts/` — локальные вспомогательные штуки для разработки.
 
 ---
@@ -158,8 +165,8 @@ osipxd/fix-month-list-start»).
 
 ## Состояние проверки
 
-На момент подготовки коммита: `vitest` — **65 тестов, все проходят**;
-`tsc --noEmit` — **без ошибок**.
+На 19.09.2026: `vitest` — **136 тестов в 14 файлах, все проходят**;
+`tsc --noEmit` — **без ошибок**. (При ребрендинге, коммит `5457f341`, было 65.)
 
 ## Чего здесь ещё нет
 

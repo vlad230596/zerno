@@ -15,7 +15,9 @@ import {
   RUN_CHECK_MESSAGE,
   formatElapsed,
   readBackgroundState,
+  appendTrace,
   selectExpenses,
+  subscribeToPush,
   summarizeSpending,
   writeBackgroundState,
 } from './6-shared/backgroundCheck'
@@ -35,10 +37,11 @@ precacheAndRoute(self.__WB_MANIFEST)
 
 /* ---------------------------------------------------------------- checking */
 
-type Trigger = 'periodic' | 'manual' | 'foreground'
+type Trigger = 'periodic' | 'push' | 'manual' | 'foreground'
 
 const TITLES: Record<Trigger, string> = {
   periodic: 'Фоновая проверка',
+  push: 'Вечерняя проверка',
   manual: 'Проверка вручную',
   foreground: 'Новые траты',
 }
@@ -61,6 +64,7 @@ type TReport = TCheckReport & {
  */
 async function buildReport(trigger: Trigger): Promise<TReport> {
   const title = TITLES[trigger]
+  const trace = traceFor(trigger)
   const state = await readBackgroundState()
 
   if (!state?.token) {
@@ -75,9 +79,14 @@ async function buildReport(trigger: Trigger): Promise<TReport> {
   const elapsed = formatElapsed(startedAt - state.lastRunAt)
 
   try {
-    const diff = await fetchDiff(state.token, state.endpoint, {
-      serverTimestamp: state.serverTimestamp,
-    })
+    await trace('запрос к ZenMoney')
+    const diff = await withTimeout(
+      fetchDiff(state.token, state.endpoint, {
+        serverTimestamp: state.serverTimestamp,
+      }),
+      FETCH_TIMEOUT
+    )
+    await trace(`ZenMoney ответил: ${diff.transaction?.length ?? 0} операций`)
     const spending = summarizeSpending(
       diff.transaction,
       await instrumentSymbols()
@@ -94,6 +103,7 @@ async function buildReport(trigger: Trigger): Promise<TReport> {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    await trace(`ошибка: ${message}`)
     // No `nextState`: the cursor stays put so the next run covers this period.
     return {
       title: `${title}: нет доступа к API`,
@@ -125,6 +135,7 @@ async function runBackgroundCheck(
   } else {
     try {
       await notify(report.title, report.body)
+      await traceFor(trigger)('уведомление показано')
       reported = true
     } catch (error) {
       // Notifications may be off; the page asking directly still counts.
@@ -137,6 +148,42 @@ async function runBackgroundCheck(
     Advancing it after a report nobody saw would swallow that period for good.
   */
   if (reported && report.nextState) await writeBackgroundState(report.nextState)
+}
+
+/**
+ * Only the runs nobody watches are traced: the page polls every quarter of an
+ * hour and would crowd them out.
+ */
+function traceFor(trigger: Trigger) {
+  return trigger === 'push' || trigger === 'periodic'
+    ? appendTrace
+    : async (_step: string) => {}
+}
+
+/**
+ * Chrome kills a push handler after 90 seconds, and a push that ends without a
+ * notification costs the site its background budget. Better to give up on
+ * ZenMoney early and say so.
+ */
+const FETCH_TIMEOUT = 45_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`ZenMoney не ответил за ${ms / 1000} с`)),
+      ms
+    )
+    promise.then(
+      value => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      error => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }
 
 /** Reads the currencies the application has already cached. Best effort. */
@@ -175,6 +222,26 @@ self.addEventListener('periodicsync', event => {
   const periodic = event as PeriodicSyncEvent
   if (periodic.tag !== CHECK_TAG) return
   periodic.waitUntil(runBackgroundCheck('periodic'))
+})
+
+/*
+  The scheduled alarm from `deploy/push`. The push is empty: what to say is
+  worked out here, from the worker's own copy of the token. It is never quiet —
+  Chrome requires every push to end in a notification.
+*/
+self.addEventListener('push', event => {
+  event.waitUntil(
+    appendTrace('пуш получен').then(() => runBackgroundCheck('push'))
+  )
+})
+
+/** The browser rotated the subscription; tell the server the new endpoint. */
+self.addEventListener('pushsubscriptionchange', event => {
+  event.waitUntil(
+    readBackgroundState().then(state =>
+      state?.token ? subscribeToPush(self.registration) : undefined
+    )
+  )
 })
 
 self.addEventListener('message', event => {

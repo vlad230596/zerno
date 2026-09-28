@@ -63,7 +63,7 @@ request is reviewed.
 
 The consumer secret ends up inside the published bundle — this is inherent to an
 application without a backend, and it is why these values are kept out of git
-but are not treated as recoverable secrets. See `docs/fork-changes.md`.
+but are not treated as recoverable secrets. See [fork-changes.md](./fork-changes.md).
 
 ## Server files
 
@@ -152,6 +152,42 @@ docker compose -p zerno --env-file .env --env-file .release.env \
 
 There is no database, so a rollback is complete — nothing survives it that would
 need migrating back.
+
+## Push alarm clock (development stand only, for now)
+
+The evening notification needs something to wake the phone at a fixed time;
+see [notifications.md](./features/notifications.md#доставка-почему-не-работало-и-что-делаем).
+That is `zerno-push` (`deploy/push`, `deploy/Dockerfile.push`): a dependency-free
+Node service that sends an **empty** Web Push at `PUSH_TIMES` in
+`PUSH_TIME_ZONE` (defaults `20:00`, `Europe/Moscow`). It stores only push
+endpoints and its own VAPID key, generated on first start, in the `push-data`
+volume. No ZenMoney token ever reaches it: the service worker computes the
+notification text itself.
+
+It is reached through the web container: nginx proxies `/push/` to the service
+on the project's private network, so Caddy and the CSP need no change. A stand
+without the service answers 502 there and otherwise works as before.
+
+`Deploy master to development` always builds and attests the image, but passes
+it to the server only when the repository variable `DEV_PUSH` is `true`: the
+deploy script learnt a fourth argument, and an older installed copy rejects it.
+One-time server steps, in this order:
+
+1. Install the new `deploy/zerno-dev-deploy` as `/usr/local/sbin/zerno-dev-deploy`
+   (root:root 0755) and the new `deploy/compose.dev.yaml` into `/opt/zerno-dev`.
+   Optionally set `PUSH_TIMES` / `PUSH_TIME_ZONE` in `/opt/zerno-dev/.env`.
+2. Set the repository variable `DEV_PUSH=true` and rerun the deployment. The
+   script now also checks that `$APP_ORIGIN/push/key` answers.
+3. In the application: switch the background check off and on, which subscribes
+   this browser. To fire once without waiting for the evening:
+   `docker compose -p zerno-dev exec push node server.mjs send`.
+
+Keep the `push-data` volume: a new VAPID key orphans every subscription until
+each browser opens the application again and re-subscribes.
+
+Locally: `DATA_DIR=.push-data PORT=8787 node deploy/push/server.mjs` next to
+`vite preview` (a build, because the worker exists only there); both Vite
+servers proxy `/push` to port 8787.
 
 ## Not configured yet
 

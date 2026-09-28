@@ -10,6 +10,10 @@ Zerno синхронизируется с аккаунтом ZenMoney и поз�
 > GPL-2.0. Точка ответвления — `be47283a`.
 > Список расхождений с оригиналом — в [docs/fork-changes.md](./docs/fork-changes.md).
 
+**Статус:** личный инстанс, в публичный доступ не выкладывается
+(`robots: noindex`). Форк живёт своей жизнью: составные операции, правила
+категоризации, язык поиска и экран «Баланс» — свои.
+
 ## Возможности
 
 - 💰 **Конверты** по нескольким валютам
@@ -23,7 +27,12 @@ Zerno синхронизируется с аккаунтом ZenMoney и поз�
 
 ## Документация
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — стек, слои FSD, устройство данных и синхронизации
+Всё в [`docs/`](./docs) — там же [оглавление со статусами](./docs/README.md).
+
+- [docs/architecture.md](./docs/architecture.md) — стек, слои FSD, устройство данных и синхронизации
+- [docs/deployment.md](./docs/deployment.md) — стенды, ключи ZenMoney, CI/CD
+- [docs/backlog.md](./docs/backlog.md) — что описано, но не сделано, и открытые дефекты
+- [docs/known-issues.md](./docs/known-issues.md) — где терялись данные и что с этим сделано
 - [docs/fork-changes.md](./docs/fork-changes.md) — что изменено относительно Zerro
 - [docs/features/](./docs/features) — проработка отдельных фич
 

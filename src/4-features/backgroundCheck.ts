@@ -9,6 +9,8 @@ import {
   RUN_CHECK_MESSAGE,
   clearBackgroundState,
   readBackgroundState,
+  subscribeToPush,
+  unsubscribeFromPush,
   writeBackgroundState,
 } from '6-shared/backgroundCheck'
 
@@ -24,6 +26,10 @@ export type TEnableError = 'unsupported' | 'noPermission' | 'noToken'
 
 export type TEnableResult = {
   error: TEnableError | null
+  /** Whether the evening alarm (Web Push) is set. */
+  push: boolean
+  /** Why it is not, when it is not. */
+  pushReason: string
   /** Whether Chrome agreed to wake the application while it is closed. */
   periodic: boolean
   /** What Chrome answered, verbatim, when it did not. */
@@ -81,11 +87,22 @@ export async function tryRegisterPeriodic(): Promise<TPeriodicAttempt> {
   }
 }
 
+/**
+ * Subscribes to the evening alarm. Repeated on every start, like the periodic
+ * request: it is idempotent and heals a server that lost its list.
+ */
+export async function trySubscribePush() {
+  const registration = await getRegistration()
+  if (!registration) return { subscribed: false, reason: 'нет service worker' }
+  return subscribeToPush(registration)
+}
+
 export function useBackgroundCheck() {
   const token = useAppSelector(getToken)
   const lastSyncTime = useAppSelector(getLastSyncTime)
   const [status, setStatus] = useState<TStatus>('loading')
   const [periodic, setPeriodic] = useState(false)
+  const [push, setPush] = useState(false)
 
   const refresh = useCallback(async () => {
     const state = await readBackgroundState()
@@ -96,6 +113,11 @@ export function useBackgroundCheck() {
       setPeriodic(tags.includes(CHECK_TAG))
     } catch {
       setPeriodic(false)
+    }
+    try {
+      setPush(!!(await registration?.pushManager?.getSubscription()))
+    } catch {
+      setPush(false)
     }
   }, [])
 
@@ -112,6 +134,8 @@ export function useBackgroundCheck() {
   const enable = useCallback(async (): Promise<TEnableResult> => {
     const refuse = (error: TEnableError): TEnableResult => ({
       error,
+      push: false,
+      pushReason: '',
       periodic: false,
       periodicReason: '',
     })
@@ -134,30 +158,35 @@ export function useBackgroundCheck() {
       serverTimestamp: Math.floor(lastSyncTime / 1000),
     })
 
+    const pushAttempt = await trySubscribePush()
     const attempt = await tryRegisterPeriodic()
     await refresh()
     return {
       error: null,
+      push: pushAttempt.subscribed,
+      pushReason: pushAttempt.reason,
       periodic: attempt.granted,
       periodicReason: attempt.reason,
     }
   }, [token, lastSyncTime, refresh])
 
   const disable = useCallback(async () => {
-    const periodicSync = (await getRegistration())?.periodicSync
-    await periodicSync?.unregister(CHECK_TAG).catch(() => {})
+    const registration = await getRegistration()
+    await registration?.periodicSync?.unregister(CHECK_TAG).catch(() => {})
+    if (registration) await unsubscribeFromPush(registration).catch(() => {})
     await clearBackgroundState()
     await refresh()
   }, [refresh])
 
-  /** Re-asks Chrome and reports the answer, for when the switch says no. */
+  /** Re-subscribes to the alarm and reports the answer, when it is not set. */
   const diagnose = useCallback(async () => {
-    const attempt = await tryRegisterPeriodic()
+    const attempt = await trySubscribePush()
+    await tryRegisterPeriodic()
     await refresh()
     return attempt
   }, [refresh])
 
-  return { status, periodic, enable, disable, diagnose, runNow, refresh }
+  return { status, push, periodic, enable, disable, diagnose, runNow, refresh }
 }
 
 /**

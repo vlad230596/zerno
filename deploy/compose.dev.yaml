@@ -16,6 +16,7 @@ services:
       - /tmp:size=32m,mode=1777
       - /var/cache/nginx:size=32m,mode=0700,uid=101,gid=101
     networks:
+      default:
       zerno-ingress:
         aliases: [zerno-dev-web]
     healthcheck:
@@ -25,6 +26,30 @@ services:
       retries: 6
     logging: *default-logging
 
+  # The evening alarm clock, see deploy/push. It keeps only push endpoints and
+  # its own VAPID key, in the volume below. It sits on the project's private
+  # network only: the web container proxies /push/ to it, so it needs neither
+  # the ingress network nor a Caddy route. Started only when the deploy passes
+  # a push image, so a stand deploys without it too.
+  push:
+    image: ${PUSH_IMAGE:-}
+    profiles: [push]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN in .env}
+      PUSH_TIMES: ${PUSH_TIMES:-20:00}
+      PUSH_TIME_ZONE: ${PUSH_TIME_ZONE:-Europe/Moscow}
+    volumes:
+      - push-data:/data
+    networks: [default]
+    logging: *default-logging
+
 networks:
+  default:
   zerno-ingress:
     external: true
+
+volumes:
+  push-data:

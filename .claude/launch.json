@@ -35,6 +35,35 @@
         "3012"
       ],
       "port": 3012
+    },
+    {
+      "name": "zerno-push",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "deploy/push/server.mjs"
+      ],
+      "port": 8787,
+      "env": {
+        "PORT": "8787",
+        "DATA_DIR": ".push-data",
+        "APP_ORIGIN": "http://localhost:3000"
+      }
+    },
+    {
+      "name": "zerno-push-preview",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": [
+        "pnpm",
+        "exec",
+        "vite",
+        "preview",
+        "--port",
+        "3000",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 3000
     }
   ]
 }

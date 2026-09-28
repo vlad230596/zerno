@@ -86,6 +86,121 @@ export async function clearBackgroundState() {
   await db.delete(STORE_NAME, STATE_KEY)
 }
 
+/* -------------------------------------------------------------------- trace */
+
+const TRACE_KEY = 'trace'
+const TRACE_LIMIT = 40
+
+export type TTraceEntry = { at: number; step: string }
+
+/**
+ * What the worker did and when, kept across runs. A worker woken with the
+ * screen off leaves no console anyone could read; this is the only way to see
+ * afterwards how far it got before Android froze it.
+ */
+export async function appendTrace(step: string) {
+  try {
+    const db = await getDb()
+    const trace = ((await db.get(STORE_NAME, TRACE_KEY)) || []) as TTraceEntry[]
+    trace.push({ at: Date.now(), step })
+    await db.put(STORE_NAME, trace.slice(-TRACE_LIMIT), TRACE_KEY)
+  } catch (error) {
+    console.warn('Trace not written', error)
+  }
+}
+
+export async function readTrace() {
+  const db = await getDb()
+  return ((await db.get(STORE_NAME, TRACE_KEY)) || []) as TTraceEntry[]
+}
+
+/* --------------------------------------------------------------------- push */
+
+/**
+ * The alarm clock lives next to the site (`deploy/push`), under this path. It
+ * sends empty pushes at fixed times and knows nothing but push endpoints.
+ */
+const PUSH_BASE = '/push'
+
+/** The answer when subscribing did not work, for the settings menu. */
+export type TPushAttempt = { subscribed: boolean; reason: string }
+
+async function postEndpoint(path: string, endpoint: string) {
+  const response = await fetch(`${PUSH_BASE}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint }),
+  })
+  if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)
+}
+
+const sameKey = (a: ArrayBuffer | null, b: Uint8Array) =>
+  !!a &&
+  a.byteLength === b.byteLength &&
+  new Uint8Array(a).every((v, i) => v === b[i])
+
+function decodeKey(base64url: string) {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
+  return Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+}
+
+/**
+ * Makes sure this browser is subscribed with the server's current key and that
+ * the server knows it. Idempotent, so it is repeated on every start: that is
+ * also what heals a server that lost its list.
+ *
+ * Callable from the page and from the worker alike.
+ */
+export async function subscribeToPush(
+  registration: ServiceWorkerRegistration
+): Promise<TPushAttempt> {
+  try {
+    if (!registration.pushManager) {
+      return { subscribed: false, reason: 'браузер не поддерживает push' }
+    }
+    const keyResponse = await fetch(`${PUSH_BASE}/key`, { cache: 'no-store' })
+    if (!keyResponse.ok) {
+      return {
+        subscribed: false,
+        reason: `сервер будильника не отвечает (HTTP ${keyResponse.status})`,
+      }
+    }
+    const { publicKey } = (await keyResponse.json()) as { publicKey: string }
+    const key = decodeKey(publicKey)
+
+    let subscription = await registration.pushManager.getSubscription()
+    // A subscription made with an old key would be refused by the push service.
+    if (
+      subscription &&
+      !sameKey(subscription.options.applicationServerKey, key)
+    ) {
+      await subscription.unsubscribe()
+      subscription = null
+    }
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        // Chrome accepts nothing else: every push must end in a notification.
+        userVisibleOnly: true,
+        applicationServerKey: key,
+      })
+    }
+    await postEndpoint('subscribe', subscription.endpoint)
+    return { subscribed: true, reason: '' }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { subscribed: false, reason: message }
+  }
+}
+
+export async function unsubscribeFromPush(
+  registration: ServiceWorkerRegistration
+) {
+  const subscription = await registration.pushManager?.getSubscription()
+  if (!subscription) return
+  await postEndpoint('unsubscribe', subscription.endpoint).catch(() => {})
+  await subscription.unsubscribe()
+}
+
 /* ---------------------------------------------------------------- reporting */
 
 /**

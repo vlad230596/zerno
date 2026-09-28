@@ -11,14 +11,16 @@ readonly COMPOSE_FILE='compose.dev.yaml'
 readonly RELEASE_ENV='.release.env'
 readonly PROJECT='zerno-dev'
 
-if [[ $# -ne 3 ]]; then
-  echo 'Usage: zerno-dev-deploy VERSION WEB_IMAGE GHCR_USER' >&2
+if [[ $# -ne 3 && $# -ne 4 ]]; then
+  echo 'Usage: zerno-dev-deploy VERSION WEB_IMAGE GHCR_USER [PUSH_IMAGE]' >&2
   exit 64
 fi
 
 readonly VERSION="$1"
 readonly WEB_IMAGE="$2"
 readonly GHCR_USER="$3"
+# Optional: without it the stand runs without the evening alarm clock.
+readonly PUSH_IMAGE="${4:-}"
 
 if [[ ! "$VERSION" =~ ^dev-[a-f0-9]{12}$ ]]; then
   echo 'Version must have form dev- followed by a 12-character commit prefix.' >&2
@@ -68,10 +70,23 @@ cleanup() {
   GHCR_TOKEN=''
   docker logout ghcr.io >/dev/null 2>&1 || true
 }
+if [[ -n "$PUSH_IMAGE" && ! "$PUSH_IMAGE" =~ ^ghcr\.io/${IMAGE_OWNER}/zerno-push@sha256:[a-f0-9]{64}$ ]]; then
+  echo "Push image must be a digest reference under ghcr.io/$IMAGE_OWNER." >&2
+  exit 64
+fi
+
 trap cleanup EXIT
 
 printf '%s\n' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USER" --password-stdin >/dev/null
 docker pull "$WEB_IMAGE"
+if [[ -n "$PUSH_IMAGE" ]]; then
+  docker pull "$PUSH_IMAGE"
+  readonly PUSH_VERSION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$PUSH_IMAGE")"
+  if [[ "$PUSH_VERSION" != "$VERSION" ]]; then
+    echo "Push image version label $PUSH_VERSION does not match requested $VERSION." >&2
+    exit 65
+  fi
+fi
 
 readonly IMAGE_VERSION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$WEB_IMAGE")"
 readonly BUILD_DATE="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.created" }}' "$WEB_IMAGE")"
@@ -87,10 +102,14 @@ cat >"${RELEASE_ENV}.next" <<EOF
 APP_VERSION=$VERSION
 BUILD_DATE=$BUILD_DATE
 WEB_IMAGE=$WEB_IMAGE
+PUSH_IMAGE=$PUSH_IMAGE
 EOF
 mv "${RELEASE_ENV}.next" "$RELEASE_ENV"
 
 compose=(docker compose -p "$PROJECT" --env-file .env --env-file "$RELEASE_ENV" -f "$COMPOSE_FILE")
+if [[ -n "$PUSH_IMAGE" ]]; then
+  compose+=(--profile push)
+fi
 "${compose[@]}" up -d --no-build --wait --wait-timeout 120
 
 readonly VERSION_JSON="$(curl --fail --silent --show-error "$APP_ORIGIN/version.json")"
@@ -102,6 +121,13 @@ readonly INDEX_HTML="$(curl --fail --silent --show-error "$APP_ORIGIN/")"
 if [[ "$INDEX_HTML" != *'<title>Zerno'* ]]; then
   echo 'Dev stand did not return the Zerno application shell.' >&2
   exit 70
+fi
+
+if [[ -n "$PUSH_IMAGE" ]]; then
+  if ! curl --fail --silent --show-error "$APP_ORIGIN/push/key" | grep -q '"publicKey"'; then
+    echo 'The push service did not answer through the web container.' >&2
+    exit 70
+  fi
 fi
 
 echo "Zerno dev $VERSION deployed successfully."

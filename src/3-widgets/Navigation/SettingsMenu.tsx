@@ -306,7 +306,8 @@ function AutoSyncItem() {
 function BackgroundCheckItem() {
   const { t } = useTranslation('settings')
   const setSnackbar = useSnackbar()
-  const { status, periodic, enable, disable, diagnose } = useBackgroundCheck()
+  const { status, push, periodic, enable, disable, diagnose } =
+    useBackgroundCheck()
 
   if (status === 'loading') return null
 
@@ -322,11 +323,12 @@ function BackgroundCheckItem() {
       setSnackbar({ message: t(`backgroundCheckError.${result.error}`) })
       return
     }
+    sendEvent(`Settings: background push ${result.push}`)
     sendEvent(`Settings: background periodic ${result.periodic}`)
     setSnackbar({
-      message: result.periodic
+      message: result.push
         ? t('backgroundCheckOn')
-        : t('backgroundCheckForegroundOnly', { reason: result.periodicReason }),
+        : t('backgroundCheckForegroundOnly', { reason: result.pushReason }),
     })
   }
 
@@ -340,11 +342,13 @@ function BackgroundCheckItem() {
           sx={{ whiteSpace: 'normal' }}
           primary={t('backgroundCheck')}
           secondary={t(
-            status === 'on' && periodic
-              ? 'backgroundCheckReachBackground'
-              : status === 'on'
-                ? 'backgroundCheckReachForeground'
-                : 'backgroundCheckDescription'
+            status === 'on' && push
+              ? 'backgroundCheckReachPush'
+              : status === 'on' && periodic
+                ? 'backgroundCheckReachBackground'
+                : status === 'on'
+                  ? 'backgroundCheckReachForeground'
+                  : 'backgroundCheckDescription'
           )}
         />
         <Switch edge="end" checked={status === 'on'} />
@@ -367,7 +371,7 @@ function BackgroundCheckItem() {
         </MenuItem>
       )}
 
-      {status === 'on' && !periodic && (
+      {status === 'on' && !push && (
         <MenuItem
           onClick={async () => {
             sendEvent('Settings: background check diagnose')
@@ -375,7 +379,7 @@ function BackgroundCheckItem() {
             // Copied, because this line is only useful once it is passed on.
             await navigator.clipboard?.writeText(attempt.reason).catch(() => {})
             setSnackbar({
-              message: attempt.granted
+              message: attempt.subscribed
                 ? t('backgroundCheckOn')
                 : t('backgroundCheckWhyNot', { reason: attempt.reason }),
             })

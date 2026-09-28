@@ -81,6 +81,7 @@ jobs:
       id-token: write
     outputs:
       digest: ${{ steps.image.outputs.digest }}
+      push_digest: ${{ steps.push-image.outputs.digest }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -143,6 +144,32 @@ jobs:
           subject-digest: ${{ steps.image.outputs.digest }}
           push-to-registry: true
 
+      - name: Build and publish push image
+        id: push-image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ./deploy/Dockerfile.push
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            APP_VERSION=${{ needs.prepare.outputs.version }}
+            BUILD_DATE=${{ needs.prepare.outputs.build_date }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/zerno-push:dev-master
+            ghcr.io/${{ github.repository_owner }}/zerno-push:dev-${{ needs.prepare.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.created=${{ needs.prepare.outputs.build_date }}
+
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/zerno-push
+          subject-digest: ${{ steps.push-image.outputs.digest }}
+          push-to-registry: true
+
   deploy:
     needs: [prepare, publish]
     if: >-
@@ -159,6 +186,9 @@ jobs:
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/zerno-web@${{ needs.publish.outputs.digest }}
+      # Passed only once the server's deploy script knows the fourth argument:
+      # an older script rejects it and would fail every deployment.
+      PUSH_IMAGE: ${{ vars.DEV_PUSH == 'true' && format('ghcr.io/{0}/zerno-push@{1}', github.repository_owner, needs.publish.outputs.push_digest) || '' }}
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_PORT: ${{ vars.VPS_PORT || '22' }}
@@ -183,4 +213,4 @@ jobs:
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             "$VPS_USER@$VPS_HOST" \
-            "sudo /usr/local/sbin/zerno-dev-deploy '$VERSION' '$WEB_IMAGE' '${{ github.actor }}'"
+            "sudo /usr/local/sbin/zerno-dev-deploy '$VERSION' '$WEB_IMAGE' '${{ github.actor }}' ${PUSH_IMAGE:+"'$PUSH_IMAGE'"}"
