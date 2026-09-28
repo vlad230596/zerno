@@ -10,4 +10,5 @@ export enum HiddenDataType {
   Rules = 'rules',
   RuleState = 'ruleState',
   Composites = 'composites',
+  Savings = 'savings',
 }

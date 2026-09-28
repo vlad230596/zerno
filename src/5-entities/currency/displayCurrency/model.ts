@@ -44,6 +44,7 @@ const useToDisplay = (defaultMonth: TDateDraft | 'current') => {
 }
 
 export const displayCurrency = {
+  getDisplayCurrency,
   useDisplayCurrency,
   useToDisplay,
   getConverter,

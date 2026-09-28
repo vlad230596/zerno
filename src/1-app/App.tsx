@@ -33,6 +33,7 @@ const Token = lazy(() => import('2-pages/Token'))
 const Stats = lazy(() => import('2-pages/Stats'))
 const Review = lazy(() => import('2-pages/Review'))
 const Rules = lazy(() => import('2-pages/Rules'))
+const Savings = lazy(() => import('2-pages/Savings'))
 
 const history = createBrowserHistory()
 
@@ -70,6 +71,7 @@ export default function App() {
     <Route key="transactions" path="/transactions" component={Transactions} />,
     <Route key="review" path="/review" component={Review} />,
     <Route key="accounts" path="/accounts" component={Accounts} />,
+    <Route key="savings" path="/savings" component={Savings} />,
     <Route key="budget" path="/budget" component={Budgets} />,
     <Route key="balance" path="/balance" component={Balance} />,
     <Route key="stats" path="/stats" component={Stats} />,

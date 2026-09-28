@@ -28,7 +28,7 @@
 | [composite-operations.md](./features/composite-operations.md) — составные операции | Первая итерация работает частично |
 | [ozon-import.md](./features/ozon-import.md) — импорт заказов Ozon | Парсер работает, в приложение не встроен |
 | [receipts-import.md](./features/receipts-import.md) — импорт чеков из ФНС | Разведка закончена, кода нет |
-| [savings.md](./features/savings.md) — портфель накоплений, лимит АСВ, пролонгации | Функционал согласован, кода нет |
+| [savings.md](./features/savings.md) — портфель накоплений, лимит АСВ, пролонгации | Первая версия, не проверена на живых данных |
 | [split-bill.md](./features/split-bill.md) — разделение счёта на доли | Черновик |
 | [notifications.md](./features/notifications.md) — уведомления об упущенной выгоде | Идеи |
 

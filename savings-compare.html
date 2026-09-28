@@ -1,0 +1,224 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Сравнение: макет и приложение</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{margin:0;font-family:'IBM Plex Sans',sans-serif;background:#cfd8dc}
+.wrap{display:flex;gap:24px;padding:16px;align-items:flex-start}
+.col{display:flex;flex-direction:column;gap:8px} .cap{font:600 14px 'IBM Plex Sans';color:#263238}
+.frame{width:390px;height:1400px;overflow:hidden;background:#f5f5f5;box-shadow:0 2px 10px rgba(0,0,0,.2)}
+iframe{border:0;width:390px;height:1400px;display:block}</style></head><body>
+<div class="wrap"><div class="col"><div class="cap">Макет</div><div class="frame">
+<div style="width: 390px; height: 1400px; box-sizing: border-box; background: #f5f5f5; display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; font-family: 'IBM Plex Sans', sans-serif; color: #212121">
+
+<div style="background: #ffffff; display: flex; flex-direction: column">
+<div style="height: 56px; display: flex; align-items: center; padding: 0 4px">
+<button type="button" aria-label="Меню" style="width: 48px; height: 48px; border: none; background: transparent; color: #37474f; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+<h1 style="margin: 0; font-size: 18px; font-weight: 500; flex-grow: 1">Накопления</h1>
+</div>
+<div style="padding: 4px 20px 16px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 34px; font-weight: 600; letter-spacing: -1px; line-height: 1.1">5 010 900 ₽</div>
+<div style="font-size: 14px; color: #616161"><span style="color: #2e7d32; font-weight: 500">≈ 66 400 ₽/мес</span> · 15,9% в среднем · 300 900 ₽ под 0%</div>
+</div>
+<!-- legend -->
+<div style="padding: 10px 20px 14px; border-top: 1px solid #f0f0f0; display: flex; gap: 14px; font-size: 12px; color: #616161">
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; border-radius: 5px; background: #37474f; color: #ffffff; display: flex; align-items: center; justify-content: center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></span>вклад</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; border-radius: 5px; background: #1976d2; color: #ffffff; display: flex; align-items: center; justify-content: center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6 4 4 6-7"></path><path d="M15 8h5v5"></path></svg></span>ежедневный</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; border-radius: 5px; background: #7b1fa2; color: #ffffff; display: flex; align-items: center; justify-content: center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M9 3v4M15 3v4"></path></svg></span>мин. остаток</span>
+</div>
+</div>
+
+<!-- Т-Банк: one owner -->
+<section style="margin: 0 12px; background: #ffffff; border-radius: 12px; overflow: hidden">
+<div style="padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="width: 28px; height: 28px; border-radius: 50%; background: #263238; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600">Т</div>
+<span style="font-size: 16px; font-weight: 600">Т-Банк</span>
+<span style="font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #eceff1; color: #37474f">Влад</span>
+<span style="flex-grow: 1"></span>
+<span style="font-size: 16px; font-weight: 600; white-space: nowrap">1 404 300 ₽</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px">
+<div style="position: relative; flex-grow: 1; height: 4px; border-radius: 2px; background: #eceff1">
+<div style="position: absolute; left: 0; top: 0; height: 4px; width: 91.2%; border-radius: 2px; background: #ef6c00"></div>
+<div style="position: absolute; left: 90.9%; top: -3px; width: 2px; height: 10px; background: #37474f"></div>
+</div>
+<span style="font-size: 12px; font-weight: 600; color: #b45309; white-space: nowrap">+4 300 сверх АСВ</span>
+</div>
+</div>
+
+<div style="border-top: 1px solid #f0f0f0; padding: 10px 16px; display: flex; gap: 10px; align-items: center">
+<div title="Вклад" style="width: 28px; height: 28px; border-radius: 7px; background: #37474f; color: #ffffff; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<span style="font-size: 15px; font-weight: 500">СмартВклад</span>
+<span style="font-size: 13px; color: #616161">18% · пролонгация</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px">
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">700 000 ₽</span>
+<span style="font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #37474f; color: #ffffff; white-space: nowrap">3 окт · 5 дн</span>
+</div>
+</div>
+
+<div style="border-top: 1px solid #f0f0f0; padding: 10px 16px; display: flex; gap: 10px; align-items: center">
+<div title="Ежедневный" style="width: 28px; height: 28px; border-radius: 7px; background: #1976d2; color: #ffffff; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6 4 4 6-7"></path><path d="M15 8h5v5"></path></svg></div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<span style="font-size: 15px; font-weight: 500">Копилка</span>
+<span style="font-size: 13px; color: #616161">16% → 12%</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px">
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">620 000 ₽</span>
+<span style="font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #eceff1; white-space: nowrap">12 окт · 14 дн</span>
+</div>
+</div>
+
+<div style="border-top: 1px solid #f0f0f0; padding: 10px 16px; display: flex; gap: 10px; align-items: center">
+<div title="Без дохода" style="width: 28px; height: 28px; border-radius: 7px; background: #eeeeee; color: #757575; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h15a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"></path><path d="M3 7l12-3v3"></path></svg></div>
+<span style="font-size: 15px; flex-grow: 1">Black <span style="font-size: 13px; color: #616161">· 0%</span></span>
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">84 300 ₽</span>
+</div>
+</section>
+
+<!-- Альфа: two owners -->
+<section style="margin: 0 12px; background: #ffffff; border-radius: 12px; overflow: hidden">
+<div style="padding: 14px 16px 12px; display: flex; align-items: center; gap: 10px">
+<div style="width: 28px; height: 28px; border-radius: 50%; background: #c62828; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600">А</div>
+<span style="font-size: 16px; font-weight: 600; flex-grow: 1">Альфа-Банк</span>
+<span style="font-size: 16px; font-weight: 600; white-space: nowrap">1 562 000 ₽</span>
+</div>
+
+<div style="margin: 0 12px 12px; border-radius: 10px; background: #f7f8f9; overflow: hidden">
+<div style="padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: center; gap: 8px">
+<div style="width: 22px; height: 22px; border-radius: 50%; background: #cfd8dc; color: #263238; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">В</div>
+<span style="font-size: 14px; font-weight: 500; flex-grow: 1">Влад</span>
+<span style="font-size: 14px; font-weight: 500; white-space: nowrap">912 000 ₽</span>
+</div>
+<div style="position: relative; height: 4px; border-radius: 2px; background: #e3e7ea">
+<div style="position: absolute; left: 0; top: 0; height: 4px; width: 59.2%; border-radius: 2px; background: #90a4ae"></div>
+<div style="position: absolute; left: 90.9%; top: -3px; width: 2px; height: 10px; background: #37474f"></div>
+</div>
+</div>
+<div style="border-top: 1px solid #eceff1; padding: 9px 12px; display: flex; gap: 10px; align-items: center">
+<div title="Минимальный остаток" style="width: 28px; height: 28px; border-radius: 7px; background: #7b1fa2; color: #ffffff; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M9 3v4M15 3v4"></path></svg></div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<span style="font-size: 15px; font-weight: 500">Альфа-Счёт</span>
+<span style="font-size: 13px; color: #616161">17%</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px">
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">900 000 ₽</span>
+<span style="font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #e3e7ea; white-space: nowrap">15 окт · 17 дн</span>
+</div>
+</div>
+<div style="border-top: 1px solid #eceff1; padding: 9px 12px; display: flex; gap: 10px; align-items: center">
+<div title="Без дохода" style="width: 28px; height: 28px; border-radius: 7px; background: #e6e6e6; color: #757575; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h15a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"></path><path d="M3 7l12-3v3"></path></svg></div>
+<span style="font-size: 15px; flex-grow: 1">Альфа-Карта <span style="font-size: 13px; color: #616161">· 0%</span></span>
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">12 000 ₽</span>
+</div>
+</div>
+
+<div style="margin: 0 12px 12px; border-radius: 10px; background: #f7f8f9; overflow: hidden">
+<div style="padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 7px">
+<div style="display: flex; align-items: center; gap: 8px">
+<div style="width: 22px; height: 22px; border-radius: 50%; background: #d7ccc8; color: #3e2723; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">К</div>
+<span style="font-size: 14px; font-weight: 500; flex-grow: 1">Катя</span>
+<span style="font-size: 14px; font-weight: 500; white-space: nowrap">650 000 ₽</span>
+</div>
+<div style="position: relative; height: 4px; border-radius: 2px; background: #e3e7ea">
+<div style="position: absolute; left: 0; top: 0; height: 4px; width: 42.2%; border-radius: 2px; background: #90a4ae"></div>
+<div style="position: absolute; left: 90.9%; top: -3px; width: 2px; height: 10px; background: #37474f"></div>
+</div>
+</div>
+<div style="border-top: 1px solid #eceff1; padding: 9px 12px; display: flex; gap: 10px; align-items: center">
+<div title="Минимальный остаток" style="width: 28px; height: 28px; border-radius: 7px; background: #7b1fa2; color: #ffffff; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M9 3v4M15 3v4"></path></svg></div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<span style="font-size: 15px; font-weight: 500">Альфа-Счёт</span>
+<span style="font-size: 13px; color: #616161">17%</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px">
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">650 000 ₽</span>
+<span style="font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #e3e7ea; white-space: nowrap">1 окт · 3 дн</span>
+</div>
+</div>
+</div>
+</section>
+
+<!-- Сбер -->
+<section style="margin: 0 12px; background: #ffffff; border-radius: 12px; overflow: hidden">
+<div style="padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="width: 28px; height: 28px; border-radius: 50%; background: #2e7d32; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600">С</div>
+<span style="font-size: 16px; font-weight: 600">Сбербанк</span>
+<span style="font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #eceff1; color: #37474f">Влад</span>
+<span style="flex-grow: 1"></span>
+<span style="font-size: 16px; font-weight: 600; white-space: nowrap">1 425 000 ₽</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px">
+<div style="position: relative; flex-grow: 1; height: 4px; border-radius: 2px; background: #eceff1">
+<div style="position: absolute; left: 0; top: 0; height: 4px; width: 92.5%; border-radius: 2px; background: #c62828"></div>
+<div style="position: absolute; left: 90.9%; top: -3px; width: 2px; height: 10px; background: #37474f"></div>
+</div>
+<span style="font-size: 12px; font-weight: 600; color: #c62828; white-space: nowrap">+25 000 сверх АСВ</span>
+</div>
+</div>
+
+<div style="border-top: 1px solid #f0f0f0; padding: 10px 16px; display: flex; gap: 10px; align-items: center">
+<div title="Вклад" style="width: 28px; height: 28px; border-radius: 7px; background: #37474f; color: #ffffff; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+<span style="font-size: 15px; font-weight: 500">Лучший %</span>
+<span style="font-size: 13px; color: #616161">18,5% · выплата на карту</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px">
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">1 380 000 ₽</span>
+<span style="font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #eceff1; white-space: nowrap">20 янв · 114 дн</span>
+</div>
+</div>
+
+<div style="border-top: 1px solid #f0f0f0; padding: 10px 16px; display: flex; gap: 10px; align-items: center">
+<div title="Без дохода" style="width: 28px; height: 28px; border-radius: 7px; background: #eeeeee; color: #757575; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h15a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"></path><path d="M3 7l12-3v3"></path></svg></div>
+<span style="font-size: 15px; flex-grow: 1">СберКарта <span style="font-size: 13px; color: #616161">· 0%</span></span>
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">45 000 ₽</span>
+</div>
+</section>
+
+<!-- Яндекс -->
+<section style="margin: 0 12px; background: #ffffff; border-radius: 12px; overflow: hidden">
+<div style="padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="width: 28px; height: 28px; border-radius: 50%; background: #455a64; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600">Я</div>
+<span style="font-size: 16px; font-weight: 600">Яндекс Банк</span>
+<span style="font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #efebe9; color: #4e342e">Катя</span>
+<span style="flex-grow: 1"></span>
+<span style="font-size: 16px; font-weight: 600; white-space: nowrap">310 000 ₽</span>
+</div>
+<div style="position: relative; height: 4px; border-radius: 2px; background: #eceff1">
+<div style="position: absolute; left: 0; top: 0; height: 4px; width: 20.1%; border-radius: 2px; background: #90a4ae"></div>
+<div style="position: absolute; left: 90.9%; top: -3px; width: 2px; height: 10px; background: #37474f"></div>
+</div>
+</div>
+<div style="border-top: 1px solid #f0f0f0; padding: 10px 16px; display: flex; gap: 10px; align-items: center">
+<div title="Ежедневный" style="width: 28px; height: 28px; border-radius: 7px; background: #1976d2; color: #ffffff; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6 4 4 6-7"></path><path d="M15 8h5v5"></path></svg></div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15px; font-weight: 500">Сейв</span>
+<span style="font-size: 13px; color: #616161">14%</span>
+</div>
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">310 000 ₽</span>
+</div>
+</section>
+
+<!-- no bank + cash -->
+<section style="margin: 0 12px; background: #ffffff; border-radius: 12px; overflow: hidden">
+<div style="padding: 12px 16px; display: flex; gap: 10px; align-items: center">
+<div style="width: 28px; height: 28px; border-radius: 50%; border: 1px dashed #90a4ae; box-sizing: border-box; color: #546e7a; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600">?</div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 15px">Накопительный счёт</span>
+<span style="font-size: 13px; color: #b45309">укажите банк и вид</span>
+</div>
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">150 000 ₽</span>
+</div>
+<div style="border-top: 1px solid #f0f0f0; padding: 12px 16px; display: flex; gap: 10px; align-items: center">
+<div style="width: 28px; height: 28px; border-radius: 50%; background: #eeeeee; color: #616161; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle></svg></div>
+<span style="font-size: 15px; flex-grow: 1">Наличные <span style="font-size: 13px; color: #616161">· ₽ и $</span></span>
+<span style="font-size: 15px; font-weight: 500; white-space: nowrap">159 600 ₽</span>
+</div>
+</section>
+</div>
+</div></div>
+<div class="col"><div class="cap">Приложение (демо-режим, те же данные)</div><div class="frame"><iframe id="app" src="/savings"></iframe></div></div></div>
+</body></html>

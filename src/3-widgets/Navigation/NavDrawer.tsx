@@ -19,6 +19,7 @@ import {
   WhatshotIcon,
   BarChartIcon,
   AutoAwesomeIcon,
+  SavingsIcon,
 } from '6-shared/ui/Icons'
 import { Logo } from '6-shared/ui/Logo'
 import { useAppTheme } from '6-shared/ui/theme'
@@ -135,6 +136,11 @@ function Links() {
         text={t('transactions')}
         path="/transactions"
         icon={<SyncAltIcon />}
+      />
+      <NavigationLink
+        text={t('savings')}
+        path="/savings"
+        icon={<SavingsIcon />}
       />
       <NavigationLink text={t('stats')} path="/stats" icon={<BarChartIcon />} />
       <NavigationLink

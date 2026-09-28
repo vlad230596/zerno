@@ -108,7 +108,11 @@ async function buildReport(trigger: Trigger): Promise<TReport> {
     return {
       title: `${title}: нет доступа к API`,
       body: `За ${elapsed} · ${message}`,
-      worthTelling: true,
+      /*
+        The page polls while it is open, and a phone waking up drops the odd
+        request; the next poll a quarter of an hour later will retry anyway.
+      */
+      worthTelling: trigger !== 'foreground',
     }
   }
 }
@@ -206,7 +210,12 @@ async function notify(title: string, body: string) {
   await self.registration.showNotification(title, {
     body,
     icon: '/icons/192px.png',
-    badge: '/icons/192px-maskable.png',
+    /*
+      Android draws the badge from its alpha channel alone, in the status bar
+      and the notification header. An opaque icon comes out as a white square,
+      so this one is the grain in white on transparency.
+    */
+    badge: '/icons/badge-96px.png',
     // One slot, so repeated checks replace each other instead of piling up.
     tag: CHECK_TAG,
   })

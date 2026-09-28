@@ -182,6 +182,7 @@ export const AccountBalanceIcon = createFeatherIcon(
 )
 
 export { default as AutoAwesomeIcon } from '@mui/icons-material/AutoAwesome'
+export { default as SavingsIcon } from '@mui/icons-material/SavingsOutlined'
 
 export const AccountBalanceWalletIcon = createFeatherIcon(
   <>
