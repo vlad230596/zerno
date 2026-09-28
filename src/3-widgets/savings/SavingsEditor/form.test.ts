@@ -127,6 +127,8 @@ describe('buildSavePatch', () => {
       kind: 'daily',
       bank: undefined,
       owner: undefined,
+      // Copied from ZenMoney's percent, before the next sync drops it
+      rate: 16,
       periodStartDay: undefined,
       promo: undefined,
       onEnd: undefined,
@@ -134,12 +136,26 @@ describe('buildSavePatch', () => {
     })
   })
 
-  it('writes a changed rate to ZenMoney', () => {
+  it('keeps the rate of a savings account in Zerno, not in ZenMoney', () => {
+    // ZenMoney drops `percent` from non-deposit accounts on sync
     const acc = makeAcc({ percent: 16 })
     const form = { ...initForm(acc, {}), rate: '17,5' }
-    expect(buildSavePatch(acc, {}, form, today).accountPatch).toEqual({
-      percent: 17.5,
-    })
+    const { accountPatch, metaPatch } = buildSavePatch(acc, {}, form, today)
+    expect(accountPatch).toEqual({})
+    expect(metaPatch.rate).toBe(17.5)
+  })
+
+  it('reads the stored rate over ZenMoney percent', () => {
+    const acc = makeAcc({ percent: null })
+    expect(initForm(acc, { kind: 'minBalance', rate: 17 }).rate).toBe('17')
+  })
+
+  it('writes a changed deposit rate to ZenMoney', () => {
+    const acc = makeAcc({ type: AccountType.Deposit, percent: 16 })
+    const form = { ...initForm(acc, {}), rate: '17,5' }
+    const { accountPatch, metaPatch } = buildSavePatch(acc, {}, form, today)
+    expect(accountPatch.percent).toBe(17.5)
+    expect(metaPatch.rate).toBeUndefined()
   })
 
   it('does not touch the rate of an account without income', () => {

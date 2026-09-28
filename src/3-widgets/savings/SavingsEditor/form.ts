@@ -94,7 +94,9 @@ export function initForm(
     kind,
     bank: savingsModel.getBankId(account, meta),
     owner: savingsModel.getOwnerId(account, meta),
-    rate: numToStr(account.percent),
+    rate: numToStr(
+      kind === 'deposit' ? account.percent : (meta.rate ?? account.percent)
+    ),
     periodStartDay: meta.periodStartDay ?? 1,
     promoEnabled: !!meta.promo,
     promoRate: numToStr(meta.promo?.rate),
@@ -183,9 +185,13 @@ export function buildSavePatch(
   // --- ZenMoney fields ---
   // Fields of kinds other than the chosen one are left as they are: the
   // editor does not show them, so it has no business clearing them.
-  if (hasRate(kind) && !isCash) {
-    const rate = parseNumber(form.rate)
-    if (rate !== null && !Number.isNaN(rate)) set('percent', rate)
+  // ZenMoney keeps `percent` only on deposits (and loans): on any other
+  // account the server drops it on the next sync. So only a deposit's rate
+  // goes there; the others' is kept in the hidden store (`meta.rate`).
+  const rate = parseNumber(form.rate)
+  const validRate = rate !== null && !Number.isNaN(rate) ? rate : null
+  if (kind === 'deposit' && !isCash && validRate !== null) {
+    set('percent', validRate)
   }
   if (kind === 'deposit' && !isCash) {
     const count = parseNumber(form.termCount)
@@ -221,6 +227,11 @@ export function buildSavePatch(
   }
 
   metaPatch.owner = form.owner === account.user ? undefined : form.owner
+
+  metaPatch.rate =
+    hasRate(kind) && kind !== 'deposit' && !isCash && validRate !== null
+      ? validRate
+      : undefined
 
   metaPatch.periodStartDay =
     kind === 'minBalance' ? form.periodStartDay : undefined

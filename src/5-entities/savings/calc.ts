@@ -252,7 +252,9 @@ export function getEffectiveRate(
   meta: TSavingsMeta | undefined,
   today: TISODate
 ): TEffectiveRate {
-  const base = account.percent ?? 0
+  const base =
+    (kind === 'deposit' ? account.percent : (meta?.rate ?? account.percent)) ??
+    0
   const none = { promoActive: false, rateUnknownAfterPromo: false }
   if (kind === 'none') return { rate: 0, ...none }
   const promo = meta?.promo

@@ -250,6 +250,17 @@ describe('getEffectiveRate', () => {
       0
     )
   })
+
+  it('takes a stored rate over ZenMoney percent, except for deposits', () => {
+    const acc = { percent: 10 }
+    const today = d('2026-01-01')
+    expect(getEffectiveRate(acc, 'daily', { rate: 15 }, today).rate).toBe(15)
+    expect(getEffectiveRate(acc, 'minBalance', { rate: 15 }, today).rate).toBe(
+      15
+    )
+    expect(getEffectiveRate(acc, 'deposit', { rate: 15 }, today).rate).toBe(10)
+    expect(getEffectiveRate({ percent: null }, 'daily', {}, today).rate).toBe(0)
+  })
 })
 
 describe('income', () => {

@@ -44,6 +44,12 @@ export type TSavingsMeta = {
   owner?: TUserId
   /** 1..31, the day a `minBalance` period starts. Clamped in short months. */
   periodStartDay?: number
+  /**
+   * Rate of a `daily` / `minBalance` account. ZenMoney keeps `percent` only on
+   * deposits and loans and drops it from other accounts on the next sync, so
+   * for them the rate lives here. `account.percent` stays as a fallback.
+   */
+  rate?: number
   promo?: TSavingsPromo
   onEnd?: TSavingsOnEnd
   /** Start of the deposit term for which the user confirmed the rate */
