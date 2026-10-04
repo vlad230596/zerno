@@ -58,7 +58,7 @@ describe('readSavingsData', () => {
 })
 
 describe('findIdleMoney', () => {
-  it('counts what lies above the floor and prices it at the best rate', () => {
+  it('counts whole balances above the floor and prices them at the best rate', () => {
     const result = findIdleMoney({
       accounts: evening(),
       instruments,
@@ -67,13 +67,23 @@ describe('findIdleMoney', () => {
     })
     expect(result).toEqual({
       idle: [
-        { id: 'tb', title: 'Т-Банк', balanceRub: 125_000, movableRub: 120_000 },
-        { id: 'alfa', title: 'Альфа', balanceRub: 103_000, movableRub: 98_000 },
+        {
+          id: 'tb',
+          title: 'Т-Банк',
+          type: AccountType.Checking,
+          balanceRub: 125_000,
+        },
+        {
+          id: 'alfa',
+          title: 'Альфа',
+          type: AccountType.Checking,
+          balanceRub: 103_000,
+        },
       ],
-      totalMovable: 218_000,
+      total: 228_000,
       best: { title: 'Яндекс Сейв', rate: 16 },
-      perDay: 96, // 218 000 × 16% / 365 = 95,56
-      perYear: 34_880,
+      perDay: 100, // 228 000 × 16% / 365 = 99,95
+      perYear: 36_480,
     })
   })
 
@@ -154,7 +164,12 @@ describe('findIdleMoney', () => {
       today,
     })
     expect(result?.idle).toEqual([
-      { id: 'usd', title: 'USD', balanceRub: 90_000, movableRub: 85_000 },
+      {
+        id: 'usd',
+        title: 'USD',
+        type: AccountType.Checking,
+        balanceRub: 90_000,
+      },
     ])
   })
 })
@@ -167,23 +182,35 @@ const plain = (text: { title: string; body: string } | null) =>
   }
 
 describe('formatIdleMoney', () => {
-  it('names the price and the biggest accounts', () => {
+  it('names the price, then the accounts one per line with an icon', () => {
     const result = findIdleMoney({
       accounts: [
         ...evening(),
-        makeAcc({ id: 'sber', title: 'Сбер', balance: 99_000 }),
+        makeAcc({
+          id: 'black',
+          title: 'Black',
+          type: AccountType.Ccard,
+          balance: 99_000,
+        }),
         makeAcc({ id: 'vtb', title: 'ВТБ', balance: 25_000 }),
+        makeAcc({ id: 'x', title: 'X', balance: 9_000 }),
+        makeAcc({ id: 'y', title: 'Y', balance: 8_000 }),
       ],
       instruments,
       savings: savings({ ya: { rate: 16 } }),
       today,
     })
     expect(plain(formatIdleMoney(result!))).toEqual({
-      title: '4 счёта без процентов: 332 000 ₽',
-      body:
-        'Под 16 % на «Яндекс Сейв» это 146 ₽ в день, 53 120 ₽ в год. ' +
-        'Т-Банк 120 000 ₽ · Альфа 98 000 ₽ · Сбер 94 000 ₽ и ещё 1 — ' +
-        'сверх 5 000 ₽ на каждом',
+      title: '6 счетов без процентов: 369 000 ₽',
+      body: [
+        '📈 16 % — 162 ₽ в день, 59 040 ₽ в год',
+        '🏦 Т-Банк — 125 000 ₽',
+        '🏦 Альфа — 103 000 ₽',
+        '💳 Black — 99 000 ₽',
+        '🏦 ВТБ — 25 000 ₽',
+        '🏦 X — 9 000 ₽',
+        'и ещё 1',
+      ].join('\n'),
     })
   })
 
@@ -198,10 +225,8 @@ describe('formatIdleMoney', () => {
       today,
     })
     expect(plain(formatIdleMoney(result!))).toEqual({
-      title: '1 счёт без процентов: 1 000 ₽',
-      body:
-        'Под 15,5 % на «Сейв» это меньше 1 ₽ в день, 155 ₽ в год. ' +
-        'Карта 1 000 ₽ — сверх 5 000 ₽',
+      title: '1 счёт без процентов: 6 000 ₽',
+      body: '📈 15,5 % — 3 ₽ в день, 930 ₽ в год\n🏦 Карта — 6 000 ₽',
     })
   })
 

@@ -19,26 +19,26 @@ import { HiddenDataType } from '../shared/hidden-store/types'
 import { classify, getEffectiveRate, isInPortfolio } from './core'
 
 /**
- * What may stay on a card without earning: spending is covered by moving
- * money at the moment it happens, so only a small float is allowed. In RUB.
+ * A card holding no more than this is not worth a notification: spending is
+ * covered by moving money at the moment it happens, so a small float is fine.
+ * Above it, the whole balance counts. In RUB.
  */
 export const IDLE_FLOOR_RUB = 5000
 
-/** How many accounts the notification names before «и ещё N». */
-const NAMED_ACCOUNTS = 3
+/** How many accounts the notification lists before «и ещё N». */
+const NAMED_ACCOUNTS = 5
 
 export type TIdleAccount = {
   id: TAccountId
   title: string
+  type: AccountType
   balanceRub: number
-  /** What could be moved: the balance above `IDLE_FLOOR_RUB` */
-  movableRub: number
 }
 
 export type TIdleMoney = {
-  /** Largest `movableRub` first */
+  /** Largest balance first */
   idle: TIdleAccount[]
-  totalMovable: number
+  total: number
   /** The best rate money can be moved to and taken back from any day */
   best: { title: string; rate: number } | null
   /** Simple interest at `best.rate`, before tax, whole rubles; 0 without it */
@@ -85,8 +85,7 @@ function readAccounts(raw: unknown): TSavingsData['accounts'] {
  * Finds the money that earns nothing and what it would earn at the best rate.
  *
  * Idle is an account in the savings portfolio whose kind is `none`, except
- * cash, holding more than `IDLE_FLOOR_RUB`; everything above the floor could
- * be moved. The rate to compare with is the highest effective rate among the
+ * cash, holding more than `IDLE_FLOOR_RUB`; its whole balance counts. The rate to compare with is the highest effective rate among the
  * `daily` and `minBalance` accounts of the portfolio — deposits cannot take
  * money in and give it back any day.
  *
@@ -127,18 +126,18 @@ export function findIdleMoney({
     idle.push({
       id: account.id,
       title: account.title,
+      type: account.type,
       balanceRub,
-      movableRub: balanceRub - IDLE_FLOOR_RUB,
     })
   }
 
   if (!idle.length) return null
-  idle.sort((a, b) => b.movableRub - a.movableRub)
-  const totalMovable = idle.reduce((sum, a) => sum + a.movableRub, 0)
-  const perYear = best ? (totalMovable * best.rate) / 100 : 0
+  idle.sort((a, b) => b.balanceRub - a.balanceRub)
+  const total = idle.reduce((sum, a) => sum + a.balanceRub, 0)
+  const perYear = best ? (total * best.rate) / 100 : 0
   return {
     idle,
-    totalMovable,
+    total,
     best,
     perDay: Math.round(perYear / 365),
     perYear: Math.round(perYear),
@@ -162,11 +161,13 @@ function rubConverter(instruments: TZmInstrument[]) {
 }
 
 /**
- * The notification text, e.g.
+ * The notification text: the price first, then the accounts one per line —
+ * Android shows the lines when the notification is expanded. E.g.
  *
- * «3 счёта без процентов: 312 000 ₽»
- * «Под 16 % на «Яндекс Сейв» это 137 ₽ в день, 50 000 ₽ в год. Т-Банк
- * 120 000 ₽ · Альфа 98 000 ₽ · Сбер 94 000 ₽ — сверх 5 000 ₽ на каждом»
+ * «2 счёта без процентов: 51 003 ₽»
+ * «📈 14 % — 18 ₽ в день, 6 440 ₽ в год
+ *  💳 Влад.Black — 45 099 ₽
+ *  🏦 Катя.Сбер — 5 904 ₽»
  *
  * Null when there is no rate to compare with: «без процентов» alone names no
  * price.
@@ -174,25 +175,30 @@ function rubConverter(instruments: TZmInstrument[]) {
 export function formatIdleMoney(
   result: TIdleMoney
 ): { title: string; body: string } | null {
-  const { idle, totalMovable, best, perDay, perYear } = result
+  const { idle, total, best, perDay, perYear } = result
   if (!best || !idle.length) return null
 
   const count = idle.length
   const accounts = pluralize(count, ['счёт', 'счёта', 'счетов'])
-  const title = `${count} ${accounts} без процентов: ${rub(totalMovable)}`
+  const title = `${count} ${accounts} без процентов: ${rub(total)}`
 
   const day = perDay > 0 ? `${rub(perDay)} в день` : 'меньше 1 ₽ в день'
-  const price = `Под ${percent(best.rate)} на «${best.title}» это ${day}, ${rub(perYear)} в год.`
+  const price = `📈 ${percent(best.rate)} — ${day}, ${rub(perYear)} в год`
 
-  const named = idle
+  const lines = idle
     .slice(0, NAMED_ACCOUNTS)
-    .map(a => `${a.title} ${rub(a.movableRub)}`)
-    .join(' · ')
+    .map(a => `${ICONS[a.type] || '💳'} ${a.title} — ${rub(a.balanceRub)}`)
   const rest = count - NAMED_ACCOUNTS
-  const more = rest > 0 ? ` и ещё ${rest}` : ''
-  const floor = `сверх ${rub(IDLE_FLOOR_RUB)}${count > 1 ? ' на каждом' : ''}`
+  if (rest > 0) lines.push(`и ещё ${rest}`)
 
-  return { title, body: `${price} ${named}${more} — ${floor}` }
+  return { title, body: [price, ...lines].join('\n') }
+}
+
+/** A card or an account, at a glance. Cash never gets here. */
+const ICONS: Partial<Record<AccountType, string>> = {
+  [AccountType.Ccard]: '💳',
+  [AccountType.Checking]: '🏦',
+  [AccountType.Emoney]: '📱',
 }
 
 const rub = (amount: number) =>

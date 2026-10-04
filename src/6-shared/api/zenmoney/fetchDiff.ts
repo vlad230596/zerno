@@ -7,7 +7,7 @@ export const fakeToken = 'fake_token'
 export async function fetchDiff(
   token: TToken,
   preference: EndpointPreference,
-  diff: TZmDiff = { serverTimestamp: 0 }
+  diff: TZmDiff & Pick<TZmRequest, 'forceFetch'> = { serverTimestamp: 0 }
 ) {
   if (!token) throw Error('No token')
 

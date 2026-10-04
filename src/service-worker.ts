@@ -12,6 +12,7 @@ import { clientsClaim } from 'workbox-core'
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 import { fetchDiff } from './6-shared/api/zenmoney/fetchDiff'
 import { storage } from './6-shared/api/storage'
+import { DataEntity } from './6-shared/types/data-entities'
 import type {
   TBackgroundState,
   TCheckReport,
@@ -120,6 +121,13 @@ async function buildReport(
       () =>
         fetchDiff(state.token, state.endpoint, {
           serverTimestamp: state.serverTimestamp,
+          /*
+            The idle-money notification needs today's balances of every
+            account, not only those changed since the worker's own cursor:
+            the application's cache may be days old.
+          */
+          forceFetch:
+            trigger === 'foreground' ? undefined : [DataEntity.Account],
         }),
       {
         /*
