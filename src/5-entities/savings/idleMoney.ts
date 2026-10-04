@@ -164,10 +164,13 @@ function rubConverter(instruments: TZmInstrument[]) {
  * The notification text: the price first, then the accounts one per line —
  * Android shows the lines when the notification is expanded. E.g.
  *
- * «2 счёта без процентов: 51 003 ₽»
- * «📈 14 % — 18 ₽ в день, 6 440 ₽ в год
- *  💳 Влад.Black — 45 099 ₽
- *  🏦 Катя.Сбер — 5 904 ₽»
+ * «2 счёта без процентов: 51 тыс. ₽»
+ * «📈 14 % — 20 ₽ в день, 7.1 тыс. ₽ в год
+ *  💳 Влад.Black — 45 тыс. ₽
+ *  🏦 Катя.Сбер — 5.9 тыс. ₽»
+ *
+ * Amounts are rounded to thousands: the notification nudges, it is not a
+ * statement. The price per day stays exact — it is small and it is the point.
  *
  * Null when there is no rate to compare with: «без процентов» alone names no
  * price.
@@ -180,14 +183,14 @@ export function formatIdleMoney(
 
   const count = idle.length
   const accounts = pluralize(count, ['счёт', 'счёта', 'счетов'])
-  const title = `${count} ${accounts} без процентов: ${rub(total)}`
+  const title = `${count} ${accounts} без процентов: ${short(total)}`
 
   const day = perDay > 0 ? `${rub(perDay)} в день` : 'меньше 1 ₽ в день'
-  const price = `📈 ${percent(best.rate)} — ${day}, ${rub(perYear)} в год`
+  const price = `📈 ${percent(best.rate)} — ${day}, ${short(perYear)} в год`
 
   const lines = idle
     .slice(0, NAMED_ACCOUNTS)
-    .map(a => `${ICONS[a.type] || '💳'} ${a.title} — ${rub(a.balanceRub)}`)
+    .map(a => `${ICONS[a.type] || '💳'} ${a.title} — ${short(a.balanceRub)}`)
   const rest = count - NAMED_ACCOUNTS
   if (rest > 0) lines.push(`и ещё ${rest}`)
 
@@ -201,8 +204,31 @@ const ICONS: Partial<Record<AccountType, string>> = {
   [AccountType.Emoney]: '📱',
 }
 
+/** Whole rubles: `20 ₽`, `1 500 ₽` */
 const rub = (amount: number) =>
   `${new Intl.NumberFormat('ru', { maximumFractionDigits: 0 }).format(amount)} ₽`
 
-const percent = (rate: number) =>
-  `${new Intl.NumberFormat('ru', { maximumFractionDigits: 2 }).format(rate)} %`
+/**
+ * Thousands and millions, with a decimal point and one digit below ten:
+ * `930 ₽`, `5.9 тыс. ₽`, `45 тыс. ₽`, `1.2 млн ₽`. The point rather than the
+ * Russian comma, as the user asked.
+ */
+export function short(amount: number) {
+  const abs = Math.abs(amount)
+  if (abs < 999.5) return rub(amount)
+  const [value, unit] =
+    abs < 999_500 ? [amount / 1_000, 'тыс.'] : [amount / 1_000_000, 'млн']
+  return `${scaled(value)} ${unit} ₽`
+}
+
+/** One decimal below ten, none above; `5.0` reads as `5` */
+function scaled(value: number) {
+  const digits = Math.abs(value) < 9.95 ? 1 : 0
+  const text = value.toFixed(digits).replace(/\.0$/, '')
+  return digits ? text : groupThousands(text)
+}
+
+const groupThousands = (text: string) =>
+  text.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+
+const percent = (rate: number) => `${Number(rate.toFixed(2))} %`

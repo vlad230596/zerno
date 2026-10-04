@@ -3,7 +3,12 @@ import type { TSavingsData } from './types'
 
 import { describe, expect, it } from 'vitest'
 import { AccountType } from '6-shared/types'
-import { findIdleMoney, formatIdleMoney, readSavingsData } from './idleMoney'
+import {
+  findIdleMoney,
+  formatIdleMoney,
+  readSavingsData,
+  short,
+} from './idleMoney'
 import { d, makeAcc } from './testHelpers'
 
 const RUB = 2
@@ -181,6 +186,22 @@ const plain = (text: { title: string; body: string } | null) =>
     body: text.body.replace(/ /g, ' '),
   }
 
+describe('short', () => {
+  it.each([
+    [930, '930 ₽'],
+    [5_904, '5.9 тыс. ₽'],
+    [5_020, '5 тыс. ₽'],
+    [9_960, '10 тыс. ₽'],
+    [45_099, '45 тыс. ₽'],
+    [999_600, '1 млн ₽'],
+    [1_240_000, '1.2 млн ₽'],
+    [12_400_000, '12 млн ₽'],
+    [1_240_000_000, '1 240 млн ₽'],
+  ])('%d → %s', (amount, expected) => {
+    expect(short(amount).replace(/ /g, ' ')).toBe(expected)
+  })
+})
+
 describe('formatIdleMoney', () => {
   it('names the price, then the accounts one per line with an icon', () => {
     const result = findIdleMoney({
@@ -201,14 +222,14 @@ describe('formatIdleMoney', () => {
       today,
     })
     expect(plain(formatIdleMoney(result!))).toEqual({
-      title: '6 счетов без процентов: 369 000 ₽',
+      title: '6 счетов без процентов: 369 тыс. ₽',
       body: [
-        '📈 16 % — 162 ₽ в день, 59 040 ₽ в год',
-        '🏦 Т-Банк — 125 000 ₽',
-        '🏦 Альфа — 103 000 ₽',
-        '💳 Black — 99 000 ₽',
-        '🏦 ВТБ — 25 000 ₽',
-        '🏦 X — 9 000 ₽',
+        '📈 16 % — 162 ₽ в день, 59 тыс. ₽ в год',
+        '🏦 Т-Банк — 125 тыс. ₽',
+        '🏦 Альфа — 103 тыс. ₽',
+        '💳 Black — 99 тыс. ₽',
+        '🏦 ВТБ — 25 тыс. ₽',
+        '🏦 X — 9 тыс. ₽',
         'и ещё 1',
       ].join('\n'),
     })
@@ -225,8 +246,8 @@ describe('formatIdleMoney', () => {
       today,
     })
     expect(plain(formatIdleMoney(result!))).toEqual({
-      title: '1 счёт без процентов: 6 000 ₽',
-      body: '📈 15,5 % — 3 ₽ в день, 930 ₽ в год\n🏦 Карта — 6 000 ₽',
+      title: '1 счёт без процентов: 6 тыс. ₽',
+      body: '📈 15.5 % — 3 ₽ в день, 930 ₽ в год\n🏦 Карта — 6 тыс. ₽',
     })
   })
 
