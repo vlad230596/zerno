@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import type { PrecacheEntry } from 'workbox-precaching'
-import type { TZmInstrument } from './6-shared/types'
+import type { TZmInstrument, TZmTransaction } from './6-shared/types'
 import { clientsClaim } from 'workbox-core'
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 import { fetchDiff } from './6-shared/api/zenmoney/fetchDiff'
@@ -14,12 +14,17 @@ import {
   CHECK_TAG,
   RUN_CHECK_MESSAGE,
   formatElapsed,
+  formatSeconds,
+  isSilentPush,
+  patchBackgroundState,
+  planPush,
   readBackgroundState,
   appendTrace,
+  retryWithin,
   selectExpenses,
   subscribeToPush,
+  summarizeCachedDay,
   summarizeSpending,
-  writeBackgroundState,
 } from './6-shared/backgroundCheck'
 
 declare const self: ServiceWorkerGlobalScope & {
@@ -48,10 +53,16 @@ const TITLES: Record<Trigger, string> = {
 
 type TReport = TCheckReport & {
   /** Where to move the cursor, once the report has reached the user. */
-  nextState?: TBackgroundState
+  cursor?: Pick<TBackgroundState, 'lastRunAt' | 'serverTimestamp'>
   /** False when there was simply nothing to tell. */
   worthTelling: boolean
+  /** True when ZenMoney answered. */
+  ok: boolean
 }
+
+/** Runs nobody watches: they retry, fall back to the cache and are traced. */
+const isBackground = (trigger: Trigger) =>
+  trigger === 'push' || trigger === 'periodic'
 
 /**
  * Asks ZenMoney what changed since the previous run and describes the spending
@@ -61,10 +72,17 @@ type TReport = TCheckReport & {
  * Nothing here writes to the application's own data. The check keeps its own
  * cursor, so whatever it reads the application still reads again on its next
  * sync.
+ *
+ * `startedAt` is when the event that woke the worker arrived: the deadline for
+ * the retries counts from it.
  */
-async function buildReport(trigger: Trigger): Promise<TReport> {
+async function buildReport(
+  trigger: Trigger,
+  startedAt: number
+): Promise<TReport> {
   const title = TITLES[trigger]
   const trace = traceFor(trigger)
+  const background = isBackground(trigger)
   const state = await readBackgroundState()
 
   if (!state?.token) {
@@ -72,19 +90,38 @@ async function buildReport(trigger: Trigger): Promise<TReport> {
       title,
       body: 'Нет сохранённого токена. Откройте Zerno и включите проверку заново.',
       worthTelling: true,
+      ok: false,
     }
   }
 
-  const startedAt = Date.now()
-  const elapsed = formatElapsed(startedAt - state.lastRunAt)
+  const elapsed = formatElapsed(Date.now() - state.lastRunAt)
 
   try {
-    await trace('запрос к ZenMoney')
-    const diff = await withTimeout(
-      fetchDiff(state.token, state.endpoint, {
-        serverTimestamp: state.serverTimestamp,
-      }),
-      FETCH_TIMEOUT
+    const diff = await retryWithin(
+      () =>
+        fetchDiff(state.token, state.endpoint, {
+          serverTimestamp: state.serverTimestamp,
+        }),
+      {
+        /*
+          The page asks while it is open and will ask again in a quarter of an
+          hour, so it gets one quick attempt. A background run has nobody to
+          ask again and waits for the network as long as Chrome allows.
+        */
+        deadline: background
+          ? startedAt + BACKGROUND_DEADLINE
+          : Date.now() + FETCH_TIMEOUT,
+        waits: background ? RETRY_WAITS : [],
+        attemptTimeout: FETCH_TIMEOUT,
+        sleep: waitForNetwork,
+        onAttempt: attempt => trace(`попытка ${attempt}: запрос к ZenMoney`),
+        onFailure: (attempt, error, took, nextWait) =>
+          trace(
+            `попытка ${attempt}: ${error.message} через ${formatSeconds(took)}` +
+              (self.navigator.onLine ? '' : ', сеть офлайн') +
+              (nextWait === null ? '' : `, пауза ${formatSeconds(nextWait)}`)
+          ),
+      }
     )
     await trace(`ZenMoney ответил: ${diff.transaction?.length ?? 0} операций`)
     const spending = summarizeSpending(
@@ -95,34 +132,48 @@ async function buildReport(trigger: Trigger): Promise<TReport> {
       title,
       body: `За ${elapsed} · ${spending}`,
       worthTelling: selectExpenses(diff.transaction).length > 0,
-      nextState: {
-        ...state,
-        lastRunAt: startedAt,
+      ok: true,
+      cursor: {
+        lastRunAt: Date.now(),
         serverTimestamp: diff.serverTimestamp,
       },
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await trace(`ошибка: ${message}`)
-    // No `nextState`: the cursor stays put so the next run covers this period.
+    // No `cursor`: it stays put so the next run covers this period.
+    const cached = background ? await cachedReport() : null
+    if (background) {
+      await trace(cached ? 'текст из кэша приложения' : 'кэш приложения пуст')
+    }
     return {
       title: `${title}: нет доступа к API`,
-      body: `За ${elapsed} · ${message}`,
+      body: cached || `За ${elapsed} · ${message}`,
       /*
         The page polls while it is open, and a phone waking up drops the odd
         request; the next poll a quarter of an hour later will retry anyway.
       */
       worthTelling: trigger !== 'foreground',
+      ok: false,
     }
   }
 }
 
 async function runBackgroundCheck(
   trigger: Trigger,
-  options: { respond?: (report: TCheckReport) => void; quiet?: boolean } = {}
+  options: {
+    respond?: (report: TCheckReport) => void
+    quiet?: boolean
+    /** When the waking event arrived; defaults to now. */
+    startedAt?: number
+    /** An earlier push this evening already reported a failure. */
+    previousFailed?: boolean
+  } = {}
 ) {
-  const report = await buildReport(trigger)
+  const report = await buildReport(trigger, options.startedAt ?? Date.now())
+  const trace = traceFor(trigger)
   let reported = false
+  let shown = false
 
   if (options.respond) {
     options.respond({ title: report.title, body: report.body })
@@ -137,10 +188,12 @@ async function runBackgroundCheck(
   if (options.quiet && !report.worthTelling) {
     reported = true
   } else {
+    const silent = isSilentPush(!!options.previousFailed, report.ok)
     try {
-      await notify(report.title, report.body)
-      await traceFor(trigger)('уведомление показано')
+      await notify(report.title, report.body, { silent })
+      await trace(silent ? 'уведомление показано тихо' : 'уведомление показано')
       reported = true
+      shown = true
     } catch (error) {
       // Notifications may be off; the page asking directly still counts.
       console.warn('Notification was not shown', error)
@@ -150,8 +203,39 @@ async function runBackgroundCheck(
   /*
     The cursor only moves once the report has actually reached the user.
     Advancing it after a report nobody saw would swallow that period for good.
+
+    Patched rather than written whole: the check may have been switched off
+    while ZenMoney was being waited for, and must then stay off.
   */
-  if (reported && report.nextState) await writeBackgroundState(report.nextState)
+  const patch: Partial<TBackgroundState> = reported ? { ...report.cursor } : {}
+  if (trigger === 'push' && shown) {
+    const { title, body, ok } = report
+    patch.lastPush = { at: Date.now(), ok, title, body }
+  }
+  if (Object.keys(patch).length) await patchBackgroundState(patch)
+}
+
+/**
+ * An evening push. The server sends several, minutes apart, so a phone whose
+ * network was still asleep at the first one gets another try. Once the evening
+ * is reported, the later pushes only repeat the same text — silently, since
+ * Chrome still wants a notification for each.
+ */
+async function runPushCheck(receivedAt: number) {
+  const state = await readBackgroundState()
+  const plan = planPush(state?.lastPush, receivedAt)
+
+  if (plan.kind === 'repeat') {
+    await appendTrace('повтор: уже показано')
+    await notify(plan.report.title, plan.report.body, { silent: true })
+    await appendTrace('уведомление показано тихо')
+    return
+  }
+
+  await runBackgroundCheck('push', {
+    startedAt: receivedAt,
+    previousFailed: plan.previousFailed,
+  })
 }
 
 /**
@@ -159,34 +243,41 @@ async function runBackgroundCheck(
  * hour and would crowd them out.
  */
 function traceFor(trigger: Trigger) {
-  return trigger === 'push' || trigger === 'periodic'
-    ? appendTrace
-    : async (_step: string) => {}
+  return isBackground(trigger) ? appendTrace : async (_step: string) => {}
 }
 
 /**
  * Chrome kills a push handler after 90 seconds, and a push that ends without a
- * notification costs the site its background budget. Better to give up on
- * ZenMoney early and say so.
+ * notification costs the site its background budget. One attempt gets at most
+ * this long.
  */
 const FETCH_TIMEOUT = 45_000
 
-function withTimeout<T>(promise: Promise<T>, ms: number) {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`ZenMoney не ответил за ${ms / 1000} с`)),
-      ms
-    )
-    promise.then(
-      value => {
-        clearTimeout(timer)
-        resolve(value)
-      },
-      error => {
-        clearTimeout(timer)
-        reject(error)
-      }
-    )
+/**
+ * A background run stops asking ZenMoney this long after it was woken, leaving
+ * the rest of Chrome's 90 seconds for the cache and the notification.
+ */
+const BACKGROUND_DEADLINE = 70_000
+
+/**
+ * Pauses between background attempts. A phone's VPN asleep in Doze has been
+ * seen to take from a few seconds to longer than one request lasts to wake.
+ */
+const RETRY_WAITS = [3_000, 7_000, 15_000, 25_000]
+
+/** Waits out a pause, cutting it short when the network comes back. */
+function waitForNetwork(ms: number) {
+  return new Promise<void>(resolve => {
+    const done = () => {
+      clearTimeout(timer)
+      self.removeEventListener('online', onOnline)
+      resolve()
+    }
+    const onOnline = () => {
+      appendTrace('сеть появилась').finally(done)
+    }
+    const timer = setTimeout(done, ms)
+    self.addEventListener('online', onOnline)
   })
 }
 
@@ -204,10 +295,40 @@ async function instrumentSymbols() {
   return symbols
 }
 
+/**
+ * Today's spending from the data the application last synced, for when
+ * ZenMoney is out of reach. Read only: the application's data and the
+ * worker's cursor stay as they are. Best effort.
+ */
+async function cachedReport() {
+  try {
+    const [transaction, serverTimestamp, symbols] = await Promise.all([
+      storage.get('transaction') as Promise<TZmTransaction[] | undefined>,
+      storage.get('serverTimestamp') as Promise<number | undefined>,
+      instrumentSymbols(),
+    ])
+    return summarizeCachedDay(
+      { transaction, serverTimestamp },
+      Date.now(),
+      symbols
+    )
+  } catch (error) {
+    console.warn('Could not read cached data', error)
+    return null
+  }
+}
+
 /* --------------------------------------------------------------- reporting */
 
-async function notify(title: string, body: string) {
-  await self.registration.showNotification(title, {
+/** `renotify` is still in Chrome but no longer in the DOM library. */
+type TNotificationOptions = NotificationOptions & { renotify?: boolean }
+
+async function notify(
+  title: string,
+  body: string,
+  { silent = false }: { silent?: boolean } = {}
+) {
+  const options: TNotificationOptions = {
     body,
     icon: '/icons/192px.png',
     /*
@@ -218,7 +339,14 @@ async function notify(title: string, body: string) {
     badge: '/icons/badge-96px.png',
     // One slot, so repeated checks replace each other instead of piling up.
     tag: CHECK_TAG,
-  })
+    /*
+      Replacing a notification under the same tag is silent by default, so a
+      success after an earlier failure would arrive unheard without this.
+    */
+    renotify: !silent,
+    silent,
+  }
+  await self.registration.showNotification(title, options)
 }
 
 /* ------------------------------------------------------------------ events */
@@ -236,11 +364,19 @@ self.addEventListener('periodicsync', event => {
 /*
   The scheduled alarm from `deploy/push`. The push is empty: what to say is
   worked out here, from the worker's own copy of the token. It is never quiet —
-  Chrome requires every push to end in a notification.
+  Chrome requires every push to end in a notification, so even a failure of the
+  check itself still shows one.
 */
 self.addEventListener('push', event => {
+  const receivedAt = Date.now()
   event.waitUntil(
-    appendTrace('пуш получен').then(() => runBackgroundCheck('push'))
+    appendTrace('пуш получен')
+      .then(() => runPushCheck(receivedAt))
+      .catch(async error => {
+        const message = error instanceof Error ? error.message : String(error)
+        await appendTrace(`сбой: ${message}`)
+        await notify(TITLES.push, `Сбой проверки: ${message}`)
+      })
   )
 })
 

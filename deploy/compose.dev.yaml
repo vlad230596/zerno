@@ -39,7 +39,8 @@ services:
     read_only: true
     environment:
       APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN in .env}
-      PUSH_TIMES: ${PUSH_TIMES:-20:00}
+      # Empty means the image's default, three evening pushes (deploy/push/lib.mjs).
+      PUSH_TIMES: ${PUSH_TIMES:-}
       PUSH_TIME_ZONE: ${PUSH_TIME_ZONE:-Europe/Moscow}
     volumes:
       - push-data:/data

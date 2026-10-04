@@ -48,6 +48,21 @@ export type TBackgroundState = {
    * consumed.
    */
   serverTimestamp: number
+  /**
+   * What the latest evening push ended with. Absent in states stored before
+   * the server learned to send several pushes an evening.
+   */
+  lastPush?: TLastPush
+}
+
+/** The report an evening push showed, kept so a later push can repeat it. */
+export type TLastPush = {
+  /** When it was shown, in milliseconds. */
+  at: number
+  /** True when ZenMoney answered; a report from the cache does not count. */
+  ok: boolean
+  title: string
+  body: string
 }
 
 let dbPromise: Promise<IDBPDatabase> | null = null
@@ -89,7 +104,8 @@ export async function clearBackgroundState() {
 /* -------------------------------------------------------------------- trace */
 
 const TRACE_KEY = 'trace'
-const TRACE_LIMIT = 40
+/** Room for a few evenings of three pushes, each with its retries. */
+const TRACE_LIMIT = 120
 
 export type TTraceEntry = { at: number; step: string }
 
@@ -262,6 +278,14 @@ export function formatElapsed(ms: number) {
   return rest ? `${hours} ч ${rest} мин` : `${hours} ч`
 }
 
+/** Seconds with at most one decimal, for the trace: `6,1 с`. */
+export function formatSeconds(ms: number) {
+  const seconds = new Intl.NumberFormat('ru', {
+    maximumFractionDigits: 1,
+  }).format(ms / 1000)
+  return `${seconds} с`
+}
+
 function plural(count: number, [one, few, many]: [string, string, string]) {
   const mod100 = count % 100
   if (mod100 >= 11 && mod100 <= 14) return many
@@ -269,6 +293,184 @@ function plural(count: number, [one, few, many]: [string, string, string]) {
   if (mod10 === 1) return one
   if (mod10 >= 2 && mod10 <= 4) return few
   return many
+}
+
+/** The user lives by Moscow time; transaction dates are written in it. */
+export const REPORT_TIME_ZONE = 'Europe/Moscow'
+
+/** Calendar date (`YYYY-MM-DD`) and wall-clock time (`HH:MM`) in a zone. */
+function zonedParts(ms: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(ms)
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find(p => p.type === type)?.value || ''
+  return {
+    date: `${get('year')}-${get('month')}-${get('day')}`,
+    day: `${get('day')}.${get('month')}`,
+    time: `${get('hour')}:${get('minute')}`,
+  }
+}
+
+/** What the application keeps in IndexedDB, as far as the fallback needs it. */
+export type TCachedData = {
+  transaction?: TZmTransaction[]
+  /** ZenMoney server timestamp of the application's last sync, in seconds. */
+  serverTimestamp?: number
+}
+
+/**
+ * Today's spending as the application last saw it, for when ZenMoney cannot
+ * be reached. Returns null when there is no cache to speak of.
+ *
+ * The cache is only as fresh as the application's last sync, so the text says
+ * when that was — with the date, if it was not today.
+ */
+export function summarizeCachedDay(
+  cache: TCachedData,
+  now: number,
+  symbols: Map<number, string> = new Map(),
+  timeZone = REPORT_TIME_ZONE
+) {
+  const { transaction, serverTimestamp } = cache
+  if (!Array.isArray(transaction) || !serverTimestamp) return null
+
+  const today = zonedParts(now, timeZone)
+  const synced = zonedParts(serverTimestamp * 1000, timeZone)
+  const spentToday = selectExpenses(transaction).filter(
+    tr => tr.date === today.date
+  )
+  const spending = spentToday.length
+    ? summarizeSpending(spentToday, symbols)
+    : 'трат нет'
+  const stamp =
+    synced.date === today.date ? synced.time : `${synced.day} ${synced.time}`
+  return `Сегодня ${spending} · данные на ${stamp}`
+}
+
+/* ----------------------------------------------------------- evening pushes */
+
+/**
+ * How long one evening lasts for the pushes in it. The server sends several a
+ * few minutes apart, so that a phone whose network is still asleep at the
+ * first one gets another chance; they all belong to the same evening.
+ */
+export const EVENING_WINDOW = 2 * 60 * 60_000
+
+export type TPushPlan =
+  /** This evening was already reported; show the same text again, silently. */
+  | { kind: 'repeat'; report: TLastPush }
+  /** Ask ZenMoney. `previousFailed` when an earlier push this evening could not. */
+  | { kind: 'check'; previousFailed: boolean }
+
+/**
+ * Decides what a push should do. Every push has to end in a notification, but
+ * the user should hear one per evening and keep the best text they got.
+ */
+export function planPush(lastPush: TLastPush | undefined, now: number) {
+  const recent =
+    !!lastPush && now - lastPush.at >= 0 && now - lastPush.at < EVENING_WINDOW
+  if (recent && lastPush.ok) {
+    return { kind: 'repeat', report: lastPush } as TPushPlan
+  }
+  return { kind: 'check', previousFailed: recent } as TPushPlan
+}
+
+/**
+ * A failure the user was already told about this evening is shown silently;
+ * the first report of the evening, and the first success after a failure,
+ * make a sound.
+ */
+export function isSilentPush(previousFailed: boolean, ok: boolean) {
+  return previousFailed && !ok
+}
+
+/* ----------------------------------------------------------------- retrying */
+
+export type TRetryOptions = {
+  /** When to give up, in milliseconds since the epoch. */
+  deadline: number
+  /** Pauses between attempts; there is one attempt more than pauses. */
+  waits: readonly number[]
+  /** The longest a single attempt may take, further capped by the deadline. */
+  attemptTimeout: number
+  /** No attempt is started with less time than this left. */
+  minAttempt?: number
+  /** How to wait out a pause; may resolve early, e.g. when the network returns. */
+  sleep?: (ms: number) => Promise<unknown>
+  onAttempt?: (attempt: number, timeout: number) => unknown
+  /** `nextWait` is null when this was the last attempt. */
+  onFailure?: (
+    attempt: number,
+    error: Error,
+    took: number,
+    nextWait: number | null
+  ) => unknown
+}
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Repeats a request until it succeeds or the deadline comes. A phone woken by a
+ * push may have no usable network for the first seconds — a VPN app asleep in
+ * Doze takes a while to come back — so one attempt is not enough, while every
+ * attempt has to fit in the time Chrome gives the push.
+ */
+export async function retryWithin<T>(
+  request: () => Promise<T>,
+  options: TRetryOptions
+): Promise<T> {
+  const { deadline, waits, attemptTimeout, minAttempt = 5_000 } = options
+  const sleep = options.sleep || delay
+  for (let attempt = 1; ; attempt++) {
+    const startedAt = Date.now()
+    const timeout = Math.max(0, Math.min(attemptTimeout, deadline - startedAt))
+    await options.onAttempt?.(attempt, timeout)
+    try {
+      return await withTimeout(request(), timeout)
+    } catch (caught) {
+      const error = caught instanceof Error ? caught : new Error(String(caught))
+      const spare = deadline - Date.now() - minAttempt
+      const nextWait =
+        attempt <= waits.length && spare >= 0
+          ? Math.min(waits[attempt - 1], spare)
+          : null
+      await options.onFailure?.(
+        attempt,
+        error,
+        Date.now() - startedAt,
+        nextWait
+      )
+      if (nextWait === null) throw error
+      await sleep(nextWait)
+    }
+  }
+}
+
+/** Rejects when the promise has not settled in time; it is not cancelled. */
+export function withTimeout<T>(promise: Promise<T>, ms: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`ZenMoney не ответил за ${formatSeconds(ms)}`)),
+      ms
+    )
+    promise.then(
+      value => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      error => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }
 
 /*

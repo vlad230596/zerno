@@ -600,6 +600,22 @@
       "noPermission": "Без разрешения на уведомления проверка бесполезна",
       "noToken": "Сначала войдите в Дзен-мани"
     },
+    "backgroundTrace": "Журнал фоновой проверки",
+    "backgroundTraceEmpty": "Журнал пуст. Сюда записываются шаги проверок, которые приложение делает само: вечерний будильник и фоновые побудки Chrome",
+    "backgroundTraceUnreadable": "Журнал не прочитался: {{reason}}",
+    "backgroundTraceRefresh": "Обновить",
+    "backgroundTraceClose": "Закрыть",
+    "backgroundTraceVerdict": {
+      "ok": "данные получены за {{seconds}} с",
+      "offline": "сеть недоступна",
+      "timeout": "ZenMoney не ответил вовремя",
+      "error": "ошибка: {{message}}",
+      "repeat": "повтор уже показанной сводки",
+      "cut": "прервано после «{{step}}»"
+    },
+    "backgroundTraceAttempts": "попыток: {{attempts}}",
+    "backgroundTraceFromCache": "сводка из кэша",
+    "backgroundTraceNotShown": "уведомление не показано",
     "language": "Язык",
     "advancedSettings": "Расширенные настройки...",
     "export": "Экспорт",

@@ -24,6 +24,7 @@ ZenMoney (см. [Hidden store](#hidden-store--где-живут-данные-zer
 | Графики | Recharts 3 |
 | i18n | i18next + react-i18next (ru/en) |
 | PWA | `vite-plugin-pwa` + Workbox, свой `service-worker.ts` (`injectManifest`) |
+| Фоновые уведомления | Web Push: сервис `deploy/push` (Node без зависимостей) шлёт пустой пуш по расписанию, текст считает воркер |
 | Тесты | Vitest + happy-dom + Testing Library |
 | Мониторинг | Sentry, Google Analytics, Яндекс.Метрика (опционально, через env) |
 
@@ -99,8 +100,9 @@ src/
 `Navigation` (десктопное меню + `MobileNavigation` + `SettingsMenu`),
 `transaction/TransactionList`, `transaction/TransactionPreview`,
 `account/AccountList`, `DebtorList`, `ErrorBoundary`, `RegularSyncHandler`
-(периодическая синхронизация), `BackgroundCheckHandler` (запрос разрешения на
-`periodicsync` и его диагностика), `RefreshButton`, `Amount`, `DataLine`, а
+(периодическая синхронизация), `BackgroundCheckHandler` (15-минутная проверка
+при открытом приложении; при каждом запуске обновляет подписку на вечерний
+пуш и переспрашивает `periodicsync`), `RefreshButton`, `Amount`, `DataLine`, а
 также `global/` — глобальные оверлеи: контекстные меню транзакции и счёта,
 дровер списка транзакций, превью транзакции, транзакции конверта.
 
@@ -113,8 +115,9 @@ src/
 - `localData.ts` — сохранение/загрузка/очистка локальной копии данных, включая
   `watchPendingChanges` — подписку, кладущую несинхронизированный дифф на диск.
 - `shared/getDataToSave.ts` — что именно уходит в IndexedDB.
-- `backgroundCheck.ts` — фоновая проверка трат: регистрация `periodicsync`,
-  разбор того, почему Chrome отказал, и запуск проверки вручную.
+- `backgroundCheck.ts` — фоновая проверка трат: включение и выключение
+  (разрешение на уведомления, подписка на вечерний пуш, `periodicsync`),
+  запуск проверки вручную.
 - `installApp.ts` — установка PWA.
 - `budget/` — `setTotalBudget`, конвертация ZenMoney-бюджетов в конверты.
 - `envelope/` — создание, переименование, перемещение конвертов и групп.
@@ -183,8 +186,11 @@ src/
   (`convertDiff.toClient/.toServer`), в т.ч. Unix-секунды → миллисекунды.
 - `api/storage.ts` (IndexedDB через `idb`), `tokenStorage.ts`,
   `zmPreferenceStorage.ts`, `fxRates.ts`.
-- `backgroundCheck.ts` — токен, курсор и `summarizeSpending()` для проверки из
-  воркера, отдельно от UI-слоя `4-features/backgroundCheck.ts`.
+- `backgroundCheck.ts` — общее для страницы и воркера: токен и курсор
+  проверки, подписка на push (`subscribeToPush` / `unsubscribeFromPush`),
+  журнал шагов фонового запуска (`appendTrace`), `summarizeSpending()`.
+  Отдельно от UI-слоя `4-features/backgroundCheck.ts`; воркер собирается
+  отдельно и импортирует файл по относительному пути.
 - `ui/` — свой ui-kit поверх MUI: `AmountInput`, `SmartDialog`, `SmartSelect`,
   `SmartConfirm`, `AdaptivePopover`, `RadialProgress`, `PercentBar`, `TagIcon`,
   `theme/`, `SnackbarProvider`, `Logo`.

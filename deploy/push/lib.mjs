@@ -71,7 +71,43 @@ export function vapidAuthorization(endpoint, jwk, subject, now = Date.now()) {
   return `vapid t=${data}.${b64url(signature)}, k=${publicKeyOf(jwk)}`
 }
 
+/* ---------------------------------------------------------------- headers */
+
+/**
+ * Every push carries the same topic, so a push service holding several for an
+ * unreachable phone keeps only the newest and delivers one push instead of a
+ * burst. RFC 8030 allows at most 32 characters of the URL-safe base64
+ * alphabet.
+ */
+export const PUSH_TOPIC = 'evening-check'
+
+export function isValidTopic(topic) {
+  return typeof topic === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(topic)
+}
+
+/** A push that could not be delivered within the hour is no longer news. */
+export const TTL_SECONDS = 60 * 60
+
+/** The headers of one empty push. */
+export function pushHeaders(endpoint, jwk, subject, now = Date.now()) {
+  return {
+    Authorization: vapidAuthorization(endpoint, jwk, subject, now),
+    TTL: String(TTL_SECONDS),
+    // High urgency is what lets the push wake a phone out of Doze.
+    Urgency: 'high',
+    Topic: PUSH_TOPIC,
+    'Content-Length': '0',
+  }
+}
+
 /* --------------------------------------------------------------- schedule */
+
+/**
+ * Three pushes an evening. The phone often wakes with no network yet (a VPN
+ * asleep in Doze), so the later ones are retries: the service worker re-shows
+ * a report it already made that evening, and tries again after a failure.
+ */
+export const DEFAULT_TIMES = '20:00,20:15,20:30'
 
 /** Parses `"20:00, 21:30"` into sorted `HH:MM` strings. */
 export function parseTimes(value) {
@@ -101,6 +137,17 @@ export function localClock(now, timeZone) {
     date: `${parts.year}-${parts.month}-${parts.day}`,
     time: `${parts.hour}:${parts.minute}`,
   }
+}
+
+/** `HH:MM:SS` of `now` in the given zone, to tell a late send from late delivery. */
+export function localTimeOfDay(now, timeZone) {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(now)
 }
 
 /**

@@ -8,7 +8,7 @@
 | Документ | О чём |
 |---|---|
 | [architecture.md](./architecture.md) | Стек, слои FSD, устройство данных, цикл синхронизации, скрытое хранилище, аутентификация |
-| [deployment.md](./deployment.md) | Два стенда за одним Caddy, ключи ZenMoney по origin, CI/CD, откат |
+| [deployment.md](./deployment.md) | Два стенда за одним Caddy, ключи ZenMoney по origin, CI/CD, откат, push-сервис |
 | [fork-changes.md](./fork-changes.md) | Чем Zerno отличается от [Zerro](https://github.com/ardov/zerro) — точка ответвления `be47283a` |
 
 ## Что происходит
@@ -30,7 +30,7 @@
 | [receipts-import.md](./features/receipts-import.md) — импорт чеков из ФНС | Разведка закончена, кода нет |
 | [savings.md](./features/savings.md) — портфель накоплений, лимит АСВ, пролонгации | Первая версия, не проверена на живых данных |
 | [split-bill.md](./features/split-bill.md) — разделение счёта на доли | Черновик |
-| [notifications.md](./features/notifications.md) — уведомления об упущенной выгоде | Идеи |
+| [notifications.md](./features/notifications.md) — уведомления об упущенной выгоде | Доставка работает, сценариев нет |
 
 ## Правила ведения
 

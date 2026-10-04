@@ -47,6 +47,7 @@ import { exportJSON } from '4-features/export/exportJSON'
 import { clearLocalData } from '4-features/localData'
 import { useInstallPrompt } from '4-features/installApp'
 import { useBackgroundCheck, runNow } from '4-features/backgroundCheck'
+import { useBackgroundTrace } from '3-widgets/BackgroundTraceDialog'
 import { convertZmBudgetsToZerro } from '4-features/budget/convertZmBudgetsToZerro'
 import { registerPopover } from '6-shared/historyPopovers'
 import { useConfirm } from '6-shared/ui/SmartConfirm'
@@ -308,6 +309,7 @@ function BackgroundCheckItem() {
   const setSnackbar = useSnackbar()
   const { status, push, periodic, enable, disable, diagnose } =
     useBackgroundCheck()
+  const openTrace = useBackgroundTrace()
 
   if (status === 'loading') return null
 
@@ -389,6 +391,17 @@ function BackgroundCheckItem() {
           <ListItemText>{t('backgroundCheckDiagnose')}</ListItemText>
         </MenuItem>
       )}
+
+      {/* Kept after switching off: the log is what explains a bad evening. */}
+      <MenuItem
+        onClick={() => {
+          sendEvent('Settings: background check trace')
+          openTrace()
+        }}
+      >
+        <ListItemIcon />
+        <ListItemText>{t('backgroundTrace')}</ListItemText>
+      </MenuItem>
     </>
   )
 }

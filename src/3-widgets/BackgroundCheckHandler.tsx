@@ -7,6 +7,7 @@ import {
   tryRegisterPeriodic,
   trySubscribePush,
 } from '4-features/backgroundCheck'
+import { SmartBackgroundTrace } from './BackgroundTraceDialog'
 
 /**
  * How often the check runs while the application is alive. Chrome may never
@@ -54,5 +55,6 @@ export const BackgroundCheckHandler: FC<{}> = () => {
     }
   }, [isLoggedIn])
 
-  return null
+  // Mounted here, once, rather than next to the menu: the menu has two copies.
+  return <SmartBackgroundTrace />
 }

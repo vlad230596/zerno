@@ -2,14 +2,18 @@ import { createServer } from 'node:http'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
+  DEFAULT_TIMES,
+  PUSH_TOPIC,
+  TTL_SECONDS,
   dueSlot,
   generateVapidKeys,
   isAllowedEndpoint,
   localClock,
+  localTimeOfDay,
   parseTimes,
   publicKeyOf,
+  pushHeaders,
   upsertSubscription,
-  vapidAuthorization,
 } from './lib.mjs'
 
 /**
@@ -27,12 +31,10 @@ import {
 
 const PORT = Number(process.env.PORT || 8080)
 const DATA_DIR = process.env.DATA_DIR || '/data'
-const TIMES = parseTimes(process.env.PUSH_TIMES || '20:00')
+const TIMES = parseTimes(process.env.PUSH_TIMES || DEFAULT_TIMES)
 const TIME_ZONE = process.env.PUSH_TIME_ZONE || 'Europe/Moscow'
 const SUBJECT =
   process.env.VAPID_SUBJECT || process.env.APP_ORIGIN || 'https://zerno.invalid'
-/** A push that could not be delivered within the hour is no longer news. */
-const TTL_SECONDS = 60 * 60
 
 const KEY_FILE = join(DATA_DIR, 'vapid.json')
 const SUBSCRIPTIONS_FILE = join(DATA_DIR, 'subscriptions.json')
@@ -86,13 +88,7 @@ function updateSubscriptions(change) {
 async function sendOne(endpoint, jwk) {
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      Authorization: vapidAuthorization(endpoint, jwk, SUBJECT),
-      TTL: String(TTL_SECONDS),
-      // High urgency is what lets the push wake a phone out of Doze.
-      Urgency: 'high',
-      'Content-Length': '0',
-    },
+    headers: pushHeaders(endpoint, jwk, SUBJECT),
     signal: AbortSignal.timeout(15_000),
   })
   return response.status
@@ -104,17 +100,27 @@ async function sendAll(jwk, reason) {
     log(`${reason}: no subscriptions`)
     return
   }
+  // The local send time, to the second: a push the phone shows minutes later
+  // than this was held up by the push service or Doze, not by this service.
+  log(
+    `${reason}: sending to ${list.length} at ${localTimeOfDay(new Date(), TIME_ZONE)} ${TIME_ZONE}`
+  )
   const gone = new Set()
   await Promise.all(
-    list.map(async ({ endpoint }) => {
-      const host = new URL(endpoint).host
+    list.map(async ({ endpoint }, i) => {
+      // The host plus the endpoint's tail tells two subscriptions apart
+      // without logging the whole capability URL.
+      const who = `#${i + 1} ${new URL(endpoint).host} …${endpoint.slice(-6)}`
+      const started = Date.now()
       try {
         const status = await sendOne(endpoint, jwk)
         // 404 and 410 mean the browser dropped the subscription for good.
         if (status === 404 || status === 410) gone.add(endpoint)
-        log(`${reason}: ${host} → ${status}`)
+        log(`${reason}: ${who} → ${status} in ${Date.now() - started} ms`)
       } catch (error) {
-        log(`${reason}: ${host} → ${error.message}`)
+        log(
+          `${reason}: ${who} → ${error.message} after ${Date.now() - started} ms`
+        )
       }
     })
   )
@@ -186,7 +192,9 @@ function serve(jwk) {
     }
   })
   server.listen(PORT, () =>
-    log(`listening on ${PORT}, firing at ${TIMES.join(', ')} ${TIME_ZONE}`)
+    log(
+      `listening on ${PORT}, firing at ${TIMES.join(', ')} ${TIME_ZONE}, topic ${PUSH_TOPIC}, TTL ${TTL_SECONDS} s`
+    )
   )
 }
 

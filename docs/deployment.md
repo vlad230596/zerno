@@ -74,6 +74,7 @@ but are not treated as recoverable secrets. See [fork-changes.md](./fork-changes
 /opt/zerno-dev/compose.dev.yaml
 /opt/zerno-dev/.env                  root:root 0600
 /opt/zerno-dev/.release.env          written by the deploy script
+docker volume zerno-dev_push-data    push endpoints and the VAPID key
 /usr/local/sbin/zerno-deploy         root:root 0755
 /usr/local/sbin/zerno-dev-deploy     root:root 0755
 /etc/sudoers.d/zerno-deploy          from deploy/zerno-deploy.sudoers, 0440
@@ -118,6 +119,7 @@ Nothing publishes a host port: Caddy reaches the containers over
 | `VPS_PORT` | variable | defaults to `22` |
 | `PRODUCTION_URL` | variable | required, the production origin |
 | `DEV_URL` | variable | required, the development origin |
+| `DEV_PUSH` | variable | `true` passes the push image to `zerno-dev-deploy`; see [Push alarm clock](#push-alarm-clock-development-stand-only-for-now) |
 
 Environments: `development`, `production`, and `release-approval` with the owner
 as a required reviewer.
@@ -156,13 +158,27 @@ need migrating back.
 ## Push alarm clock (development stand only, for now)
 
 The evening notification needs something to wake the phone at a fixed time;
-see [notifications.md](./features/notifications.md#доставка-почему-не-работало-и-что-делаем).
+see [notifications.md](./features/notifications.md#доставка-что-не-работало-и-что-сделано).
 That is `zerno-push` (`deploy/push`, `deploy/Dockerfile.push`): a dependency-free
 Node service that sends an **empty** Web Push at `PUSH_TIMES` in
-`PUSH_TIME_ZONE` (defaults `20:00`, `Europe/Moscow`). It stores only push
+`PUSH_TIME_ZONE` (defaults `20:00,20:15,20:30`, `Europe/Moscow`). It stores only push
 endpoints and its own VAPID key, generated on first start, in the `push-data`
 volume. No ZenMoney token ever reaches it: the service worker computes the
 notification text itself.
+
+Why three pushes: the pushes arrive every evening, but the phone often wakes
+with no network yet (the VPN asleep in Doze), and the worker's request then
+fails. So the later pushes are retries. After a successful report that evening
+the worker only re-shows it silently; after a failure it tries again. Every push
+is `Urgency: high`, `TTL` one hour and carries `Topic: evening-check`: if the
+phone is unreachable and several are queued at the push service, the topic makes
+it keep only the newest, so the phone gets one push rather than a burst.
+
+The default lives in the image (`DEFAULT_TIMES` in `deploy/push/lib.mjs`);
+`compose.dev.yaml` passes `PUSH_TIMES` through empty unless `.env` sets it. So
+changing the default takes a new push image (a deployment with `DEV_PUSH=true`),
+and an `.env` value or an older installed compose file that hard-codes `20:00`
+overrides it.
 
 It is reached through the web container: nginx proxies `/push/` to the service
 on the project's private network, so Caddy and the CSP need no change. A stand
@@ -170,8 +186,19 @@ without the service answers 502 there and otherwise works as before.
 
 `Deploy master to development` always builds and attests the image, but passes
 it to the server only when the repository variable `DEV_PUSH` is `true`: the
-deploy script learnt a fourth argument, and an older installed copy rejects it.
-One-time server steps, in this order:
+deploy script learnt an optional fourth argument, and an older installed copy
+rejects it. With the argument, the script also checks the push image's version
+label, starts the `push` compose profile, and verifies that
+`$APP_ORIGIN/push/key` answers through the web container.
+
+**Current state (29.09.2026):** done on the development stand. The new script
+and compose file are installed (the previous copies are kept next to them as
+`*.bak-20260929`), `DEV_PUSH=true` is set, `zerno-dev-push-1` runs next to
+`zerno-dev-web-1`, and one phone is subscribed. Production is untouched:
+`zerno-deploy`, `compose.prod.yaml` and `release.yml` know nothing about the
+service yet.
+
+The one-time steps, for reference and for production later, in this order:
 
 1. Install the new `deploy/zerno-dev-deploy` as `/usr/local/sbin/zerno-dev-deploy`
    (root:root 0755) and the new `deploy/compose.dev.yaml` into `/opt/zerno-dev`.
@@ -180,10 +207,23 @@ One-time server steps, in this order:
    script now also checks that `$APP_ORIGIN/push/key` answers.
 3. In the application: switch the background check off and on, which subscribes
    this browser. To fire once without waiting for the evening:
-   `docker compose -p zerno-dev exec push node server.mjs send`.
+   `docker exec zerno-dev-push-1 node server.mjs send`.
 
 Keep the `push-data` volume: a new VAPID key orphans every subscription until
-each browser opens the application again and re-subscribes.
+each browser opens the application again and re-subscribes. The service logs,
+in `docker logs zerno-dev-push-1`, its schedule at start, then for every send a
+line with the slot and the local send time to the second, and one line per
+subscription with its push service's answer and how long it took (`201` is
+delivered to FCM, `404`/`410` drop the subscription):
+
+```
+… scheduled 2026-10-04 20:15: sending to 1 at 20:15:12 Europe/Moscow
+… scheduled 2026-10-04 20:15: #1 fcm.googleapis.com …a1b2c3 → 201 in 180 ms
+```
+
+The schedule is polled every 20 seconds, so a send lands up to 20 s after its
+slot. A notification that shows minutes later than the logged send time (once
+20:05:28 for a 20:00 push) was held up by the push service or Doze, not here.
 
 Locally: `DATA_DIR=.push-data PORT=8787 node deploy/push/server.mjs` next to
 `vite preview` (a build, because the worker exists only there); both Vite

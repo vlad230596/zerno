@@ -124,8 +124,8 @@ osipxd/fix-month-list-start»).
 - [`known-issues.md`](./known-issues.md) — места, где терялись данные
   пользователя, и что с ними сделано.
 - [`features/`](./features) — проработка фич: `auto-categorization.md`,
-  `composite-operations.md`, `ozon-import.md`, `notifications.md`,
-  `split-bill.md`.
+  `composite-operations.md`, `ozon-import.md`, `receipts-import.md`,
+  `savings.md`, `notifications.md`, `split-bill.md`.
 - `.claude/launch.json`, `scripts/` — локальные вспомогательные штуки для разработки.
 
 ---
@@ -163,10 +163,53 @@ osipxd/fix-month-list-start»).
   контурами: знак плюс «Zerno» текстом в IBM Plex Sans. Рамка подогнана по
   реальной ширине контента.
 
+## 10. Фоновая проверка и вечерний будильник
+
+Подробно, с диагностикой и замерами, — в
+[`notifications.md`](./features/notifications.md#доставка-что-не-работало-и-что-сделано).
+
+**Было** (коммиты `15750d1d`, `ad48e81e`, `2de3d6b0`): установка как PWA и
+фоновая проверка трат на `periodicsync` плюс 15-минутный таймер при открытом
+приложении. **При закрытом приложении это не работало ни разу**: Zerno стоит
+на телефоне ярлыком Chrome, а не WebAPK, и Chrome на Android отвечает ярлыку
+на `periodicsync` безусловным отказом; таймер же живёт, только пока страница
+не заморожена. Даже с WebAPK `periodicsync` не дал бы «вечером»: интервал от
+12 ч, время выбирает браузер.
+
+**Стало** (коммиты `bc831f9e`, `8879e325`):
+
+| Где | Что |
+|---|---|
+| [`deploy/push`](../deploy/push), [`deploy/Dockerfile.push`](../deploy/Dockerfile.push) | Сервис `zerno-push`: пустой Web Push по расписанию (20:00, `Europe/Moscow`), подпись VAPID без зависимостей, белый список push-сервисов, не больше 16 подписок. Токена и данных не хранит |
+| [`service-worker.ts`](../src/service-worker.ts) | Обработчики `push` и `pushsubscriptionchange`; уведомление на каждый пуш; тайм-аут запроса к ZenMoney 45 с; журнал шагов; монохромный `badge`; тихий опрос больше не объявляет сетевые ошибки |
+| [`6-shared/backgroundCheck.ts`](../src/6-shared/backgroundCheck.ts) | `subscribeToPush` / `unsubscribeFromPush`, общие для страницы и воркера; `appendTrace` / `readTrace` |
+| [`4-features/backgroundCheck.ts`](../src/4-features/backgroundCheck.ts), [`BackgroundCheckHandler`](../src/3-widgets/BackgroundCheckHandler.tsx), [`SettingsMenu`](../src/3-widgets/Navigation/SettingsMenu.tsx) | Переключатель подписывает и отписывает, каждый запуск обновляет подписку; тексты меню — про вечернюю сводку |
+| [`public/icons/badge-96px.png`](../public/icons/badge-96px.png) | Белый силуэт зерна на прозрачном фоне: Android рисует `badge` по альфа-каналу, и прежняя непрозрачная иконка выходила белым квадратом |
+| [`deploy/nginx.web.conf`](../deploy/nginx.web.conf), [`compose.dev.yaml`](../deploy/compose.dev.yaml), [`zerno-dev-deploy`](../deploy/zerno-dev-deploy), [`dev-deploy.yml`](../.github/workflows/dev-deploy.yml) | `/push/` проксируется из контейнера сайта; сервис в профиле `push` на приватной сети проекта; необязательный четвёртый аргумент скрипта деплоя; CI собирает образ `zerno-push` и передаёт его при `DEV_PUSH=true` |
+| [`vite.config.ts`](../vite.config.ts), `.claude/launch.json` | Прокси `/push` на локальный сервис для `vite` и `vite preview`; конфигурации `zerno-push` и `zerno-push-preview` |
+
+**Что было сделано не так** — записано, чтобы не повторять:
+
+- Отказ `periodicsync` был виден в меню с первого дня, но его сочли временным
+  и строили на нём дальше; `notifications.md` утверждал, что «механика доставки
+  уже построена». Проверять надо было на телефоне, а не по ответу API: как
+  установлено приложение и что лежит в планировщике Android.
+- `badge` указывал на маскируемую иконку — непрозрачную, поэтому белый квадрат.
+- 15-минутный опрос в тихом режиме всё равно показывал уведомления об ошибках
+  сети.
+- Коммит `8879e325` сделан через `git add -A` и захватил вместе с двумя
+  правками уведомлений незакоммиченную работу над накоплениями (48 файлов,
+  `src/3-widgets/savings`, `src/5-entities/savings`, логотипы банков, правки
+  `App.tsx`, `Accounts.tsx`, `NavDrawer.tsx`, переводов, `savings-compare.html`
+  в корне). Решено оставить как есть; при следующих коммитах добавлять файлы
+  поимённо.
+
 ## Состояние проверки
 
-На 19.09.2026: `vitest` — **136 тестов в 14 файлах, все проходят**;
-`tsc --noEmit` — **без ошибок**. (При ребрендинге, коммит `5457f341`, было 65.)
+На 29.09.2026: `vitest` — **227 тестов в 19 файлах, все проходят** (в том
+числе 8 тестов push-сервиса в `deploy/push/lib.test.mjs`); `tsc --noEmit` —
+**без ошибок**. (19.09.2026 было 136 в 14 файлах; при ребрендинге, коммит
+`5457f341`, — 65.)
 
 ## Чего здесь ещё нет
 

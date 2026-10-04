@@ -1,13 +1,18 @@
 import { createPublicKey, verify } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_TIMES,
   MAX_SUBSCRIPTIONS,
+  PUSH_TOPIC,
   dueSlot,
   generateVapidKeys,
   isAllowedEndpoint,
+  isValidTopic,
   localClock,
+  localTimeOfDay,
   parseTimes,
   publicKeyOf,
+  pushHeaders,
   upsertSubscription,
   vapidAuthorization,
 } from './lib.mjs'
@@ -74,9 +79,46 @@ describe('vapidAuthorization', () => {
   })
 })
 
+describe('pushHeaders', () => {
+  it('sends an empty, urgent push under one topic', () => {
+    const jwk = generateVapidKeys()
+    const headers = pushHeaders(
+      'https://fcm.googleapis.com/fcm/send/abc',
+      jwk,
+      'https://zerno.example',
+      0
+    )
+    expect(headers).toMatchObject({
+      TTL: '3600',
+      Urgency: 'high',
+      Topic: 'evening-check',
+      'Content-Length': '0',
+    })
+    expect(headers.Authorization).toMatch(/^vapid t=/)
+  })
+
+  it('uses a topic RFC 8030 allows', () => {
+    expect(isValidTopic(PUSH_TOPIC)).toBe(true)
+    expect(isValidTopic('a'.repeat(32))).toBe(true)
+    expect(isValidTopic('a'.repeat(33))).toBe(false)
+    expect(isValidTopic('evening check')).toBe(false)
+    expect(isValidTopic('evening+check')).toBe(false)
+    expect(isValidTopic('')).toBe(false)
+  })
+})
+
 describe('schedule', () => {
   it('parses a list of times, dropping nonsense', () => {
     expect(parseTimes('21:30, 20:00,25:00,, 7:00')).toEqual(['20:00', '21:30'])
+  })
+
+  it('fires three times an evening by default', () => {
+    expect(parseTimes(DEFAULT_TIMES)).toEqual(['20:00', '20:15', '20:30'])
+  })
+
+  it('reads the time of day to the second, for the send log', () => {
+    const now = new Date('2026-09-29T17:05:28Z')
+    expect(localTimeOfDay(now, 'Europe/Moscow')).toBe('20:05:28')
   })
 
   it('reads the clock in the given zone', () => {
@@ -99,6 +141,18 @@ describe('schedule', () => {
     expect(
       dueSlot(['20:00'], { date: '2026-09-30', time: '20:00' }, fired)
     ).toBe('2026-09-30 20:00')
+  })
+
+  it('fires each of several evening slots on its own', () => {
+    const times = parseTimes(DEFAULT_TIMES)
+    const fired = new Set()
+    const at = time => dueSlot(times, { date: '2026-09-29', time }, fired)
+    expect(at('20:00')).toBe('2026-09-29 20:00')
+    fired.add('2026-09-29 20:00')
+    expect(at('20:00')).toBeNull()
+    expect(at('20:07')).toBeNull()
+    expect(at('20:15')).toBe('2026-09-29 20:15')
+    expect(at('20:30')).toBe('2026-09-29 20:30')
   })
 })
 
