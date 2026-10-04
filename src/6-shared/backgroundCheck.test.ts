@@ -1,4 +1,4 @@
-import type { TZmTransaction } from './types'
+import type { TZmDeletionObject, TZmTransaction } from './types'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -6,11 +6,14 @@ import {
   formatElapsed,
   formatSeconds,
   isSilentPush,
+  mergeFresh,
   planPush,
   retryWithin,
   selectExpenses,
   summarizeCachedDay,
+  shouldShowIdle,
   summarizeSpending,
+  zonedDay,
 } from './backgroundCheck'
 
 const RUB = 2
@@ -398,5 +401,70 @@ describe('retryWithin', () => {
     await vi.runAllTimersAsync()
     await expect(result).resolves.toBe('ok')
     expect(starts).toEqual([0, 1_000])
+  })
+})
+
+describe('zonedDay', () => {
+  it('is the Moscow date, not the UTC one', () => {
+    // 22:30 UTC is already the next day in Moscow
+    expect(zonedDay(Date.UTC(2026, 9, 4, 22, 30))).toBe('2026-10-05')
+  })
+})
+
+describe('shouldShowIdle', () => {
+  const today = '2026-10-04'
+  it('shows once a day', () => {
+    expect(shouldShowIdle(undefined, today, false)).toBe(true)
+    expect(
+      shouldShowIdle({ day: '2026-10-03', fresh: true }, today, false)
+    ).toBe(true)
+    expect(shouldShowIdle({ day: today, fresh: true }, today, true)).toBe(false)
+    expect(shouldShowIdle({ day: today, fresh: false }, today, false)).toBe(
+      false
+    )
+  })
+  it('replaces a text from the cache with a fresh one the same day', () => {
+    expect(shouldShowIdle({ day: today, fresh: false }, today, true)).toBe(true)
+  })
+})
+
+describe('mergeFresh', () => {
+  const item = (id: string, changed: number, title = id) => ({
+    id,
+    changed,
+    title,
+  })
+  const deletion = (id: string, object: string) =>
+    ({ id, object, stamp: 0, user: 1 }) as TZmDeletionObject
+
+  it('lays newer items over the cache and keeps the rest', () => {
+    const merged = mergeFresh(
+      [item('a', 1), item('b', 1)],
+      [item('b', 2, 'new b'), item('c', 2)],
+      undefined,
+      'account'
+    )
+    expect(merged.map(i => i.title)).toEqual(['a', 'new b', 'c'])
+  })
+  it('keeps the cached item when it is newer', () => {
+    const merged = mergeFresh(
+      [item('a', 5, 'cached')],
+      [item('a', 3, 'stale')],
+      undefined,
+      'account'
+    )
+    expect(merged[0].title).toBe('cached')
+  })
+  it('drops what the diff deleted, of this entity only', () => {
+    const merged = mergeFresh(
+      [item('a', 1), item('b', 1)],
+      [],
+      [deletion('a', 'account'), deletion('b', 'reminder')],
+      'account'
+    )
+    expect(merged.map(i => i.id)).toEqual(['b'])
+  })
+  it('copes with nothing cached and nothing fresh', () => {
+    expect(mergeFresh(undefined, undefined, undefined, 'account')).toEqual([])
   })
 })

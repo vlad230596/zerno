@@ -120,6 +120,35 @@ describe('groupTrace', () => {
   })
 })
 
+describe('idle money steps', () => {
+  // They follow the summary and must not change what the run is judged by
+  it('leave the verdict of a failed run alone', () => {
+    const [run] = groupTrace([
+      { at: evening(4), step: 'пуш получен' },
+      { at: evening(4, 20, 0, 1), step: 'попытка 1: запрос к ZenMoney' },
+      { at: evening(4, 20, 0, 2), step: 'ошибка: Failed to fetch' },
+      { at: evening(4, 20, 0, 3), step: 'текст из кэша приложения' },
+      { at: evening(4, 20, 0, 4), step: 'уведомление показано' },
+      { at: evening(4, 20, 0, 5), step: 'без процентов: ошибка boom' },
+    ])
+    expect(run.verdict).toEqual({ kind: 'offline', attempts: 1 })
+    expect(run.fromCache).toBe(true)
+  })
+
+  it('leave a run that showed nothing unnotified', () => {
+    const [run] = groupTrace([
+      { at: evening(5), step: 'пуш получен' },
+      { at: evening(5, 20, 0, 1), step: 'запрос к ZenMoney' },
+      { at: evening(5, 20, 0, 2), step: 'без процентов: 2 счёта, 50 ₽ в день' },
+    ])
+    expect(run.notified).toBe(false)
+    expect(run.verdict).toEqual({
+      kind: 'cut',
+      lastStep: 'без процентов: 2 счёта, 50 ₽ в день',
+    })
+  })
+})
+
 describe('isErrorStep', () => {
   it.each([
     ['ошибка: Failed to fetch', true],
@@ -129,6 +158,8 @@ describe('isErrorStep', () => {
     ['сбой: boom', true],
     ['попытка 2: запрос к ZenMoney', false],
     ['пуш получен', false],
+    ['без процентов: 3 счёта, 137 ₽ в день', false],
+    ['без процентов: ошибка Quota exceeded', false],
   ])('%s → %s', (step, expected) => {
     expect(isErrorStep(step)).toBe(expected)
   })

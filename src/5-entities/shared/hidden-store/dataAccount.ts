@@ -4,8 +4,9 @@ import { accountModel } from '5-entities/account'
 import { applyClientPatch } from 'store/data'
 import { userModel } from '5-entities/user'
 import { TAccountId } from '6-shared/types'
+import { DATA_ACC_NAME } from './dataAccountName'
 
-export const DATA_ACC_NAME = '🤖 [Zerro Data]'
+export { DATA_ACC_NAME }
 
 /**
  *  This is helper account which is used to store reminders with hidden data.

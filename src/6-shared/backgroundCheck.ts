@@ -1,5 +1,5 @@
 import type { EndpointPreference } from './api/zenmoney/endpoints'
-import type { TZmTransaction } from './types'
+import type { TZmDeletionObject, TZmTransaction } from './types'
 import { openDB, type IDBPDatabase } from 'idb'
 
 /**
@@ -53,6 +53,11 @@ export type TBackgroundState = {
    * the server learned to send several pushes an evening.
    */
   lastPush?: TLastPush
+  /**
+   * When the background runs last showed money earning no interest. Absent
+   * in states stored before that notification existed.
+   */
+  lastIdle?: TLastIdle
 }
 
 /** The report an evening push showed, kept so a later push can repeat it. */
@@ -63,6 +68,14 @@ export type TLastPush = {
   ok: boolean
   title: string
   body: string
+}
+
+/** The day the idle-money notification was shown on, by background runs. */
+export type TLastIdle = {
+  /** Calendar date in `REPORT_TIME_ZONE`, `YYYY-MM-DD` */
+  day: string
+  /** False when it was worked out from the cache, ZenMoney being out of reach */
+  fresh: boolean
 }
 
 let dbPromise: Promise<IDBPDatabase> | null = null
@@ -318,6 +331,11 @@ function zonedParts(ms: number, timeZone: string) {
   }
 }
 
+/** Today's calendar date (`YYYY-MM-DD`) in the user's zone. */
+export function zonedDay(ms: number, timeZone = REPORT_TIME_ZONE) {
+  return zonedParts(ms, timeZone).date
+}
+
 /** What the application keeps in IndexedDB, as far as the fallback needs it. */
 export type TCachedData = {
   transaction?: TZmTransaction[]
@@ -389,6 +407,51 @@ export function planPush(lastPush: TLastPush | undefined, now: number) {
  */
 export function isSilentPush(previousFailed: boolean, ok: boolean) {
   return previousFailed && !ok
+}
+
+/* --------------------------------------------------------------- idle money */
+
+/** Its own slot: the money earning no interest must not replace the summary. */
+export const IDLE_MONEY_TAG = 'zerno-idle-money'
+
+/**
+ * Whether a background run should show the idle-money notification: once a
+ * day — but a text from the cache gives way to a fresh one the same day, as a
+ * later push of the evening may reach ZenMoney where the first did not.
+ */
+export function shouldShowIdle(
+  last: TLastIdle | undefined,
+  today: string,
+  fresh: boolean
+) {
+  if (!last || last.day !== today) return true
+  return fresh && !last.fresh
+}
+
+/**
+ * The application's cached copy of one entity with a fresh diff laid over it:
+ * by `id`, the newer `changed` wins and whatever the diff deleted is dropped.
+ *
+ * The diff the worker gets runs from its own cursor, not from the
+ * application's last sync, so anything that changed between the two is still
+ * as the cache has it.
+ */
+export function mergeFresh<T extends { id: string | number; changed: number }>(
+  cached: T[] | undefined,
+  fresh: T[] | undefined,
+  deletion: TZmDeletionObject[] | undefined,
+  entity: string
+): T[] {
+  const byId = new Map<string | number, T>()
+  cached?.forEach(item => byId.set(item.id, item))
+  fresh?.forEach(item => {
+    const known = byId.get(item.id)
+    if (!known || item.changed >= known.changed) byId.set(item.id, item)
+  })
+  deletion?.forEach(d => {
+    if (String(d.object) === entity) byId.delete(d.id)
+  })
+  return Array.from(byId.values())
 }
 
 /* ----------------------------------------------------------------- retrying */

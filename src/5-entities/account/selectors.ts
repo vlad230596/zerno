@@ -4,7 +4,8 @@ import { AccountType, ById } from '6-shared/types'
 import { RootState } from 'store'
 import { instrumentModel } from '5-entities/currency/instrument'
 import { TAccountPopulated } from './shared/populate'
-import { DATA_ACC_NAME } from '../shared/hidden-store'
+// Not the store's index: that one needs this model, a cycle
+import { DATA_ACC_NAME } from '../shared/hidden-store/dataAccountName'
 
 // SELECTORS
 

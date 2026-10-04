@@ -1,6 +1,13 @@
 /// <reference lib="webworker" />
 import type { PrecacheEntry } from 'workbox-precaching'
-import type { TZmInstrument, TZmTransaction } from './6-shared/types'
+import type {
+  TISODate,
+  TZmAccount,
+  TZmDiff,
+  TZmInstrument,
+  TZmReminder,
+  TZmTransaction,
+} from './6-shared/types'
 import { clientsClaim } from 'workbox-core'
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 import { fetchDiff } from './6-shared/api/zenmoney/fetchDiff'
@@ -12,20 +19,30 @@ import type {
 } from './6-shared/backgroundCheck'
 import {
   CHECK_TAG,
+  IDLE_MONEY_TAG,
   RUN_CHECK_MESSAGE,
   formatElapsed,
   formatSeconds,
   isSilentPush,
+  mergeFresh,
   patchBackgroundState,
   planPush,
   readBackgroundState,
   appendTrace,
   retryWithin,
   selectExpenses,
+  shouldShowIdle,
   subscribeToPush,
   summarizeCachedDay,
   summarizeSpending,
+  zonedDay,
 } from './6-shared/backgroundCheck'
+import pluralize from './6-shared/helpers/pluralize'
+import {
+  findIdleMoney,
+  formatIdleMoney,
+  readSavingsData,
+} from './5-entities/savings/idleMoney'
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry | string>
@@ -58,6 +75,8 @@ type TReport = TCheckReport & {
   worthTelling: boolean
   /** True when ZenMoney answered. */
   ok: boolean
+  /** What ZenMoney answered, for whatever else the run works out. */
+  diff?: TZmDiff
 }
 
 /** Runs nobody watches: they retry, fall back to the cache and are traced. */
@@ -133,6 +152,7 @@ async function buildReport(
       body: `За ${elapsed} · ${spending}`,
       worthTelling: selectExpenses(diff.transaction).length > 0,
       ok: true,
+      diff,
       cursor: {
         lastRunAt: Date.now(),
         serverTimestamp: diff.serverTimestamp,
@@ -213,6 +233,78 @@ async function runBackgroundCheck(
     patch.lastPush = { at: Date.now(), ok, title, body }
   }
   if (Object.keys(patch).length) await patchBackgroundState(patch)
+
+  // The page polling while open is not the evening; it never shows this.
+  if (trigger !== 'foreground') await reportIdleMoney(trigger, report.diff)
+}
+
+/**
+ * Money earning no interest: a notification of its own, next to the summary.
+ * Silent, since the summary shown at the same moment has already made the
+ * sound; background runs show it once a day, the manual check every time.
+ *
+ * Never throws: whatever goes wrong here must not cost the summary anything.
+ */
+async function reportIdleMoney(trigger: Trigger, diff: TZmDiff | undefined) {
+  const trace = traceFor(trigger)
+  try {
+    const state = await readBackgroundState()
+    if (!state?.token) return
+    const now = Date.now()
+    const today = zonedDay(now)
+    const fresh = !!diff
+    if (
+      isBackground(trigger) &&
+      !shouldShowIdle(state.lastIdle, today, fresh)
+    ) {
+      await trace('без процентов: сегодня уже было')
+      return
+    }
+
+    const [account, instrument, reminder] = await Promise.all([
+      storage.get('account') as Promise<TZmAccount[] | undefined>,
+      storage.get('instrument') as Promise<TZmInstrument[] | undefined>,
+      storage.get('reminder') as Promise<TZmReminder[] | undefined>,
+    ])
+    const deletion = diff?.deletion
+    const result = findIdleMoney({
+      accounts: mergeFresh(account, diff?.account, deletion, 'account'),
+      instruments: mergeFresh(
+        instrument,
+        diff?.instrument,
+        deletion,
+        'instrument'
+      ),
+      savings: readSavingsData(
+        mergeFresh(reminder, diff?.reminder, deletion, 'reminder')
+      ),
+      today: today as TISODate,
+    })
+    const text = result && formatIdleMoney(result)
+    if (!result || !text) {
+      await trace(
+        result
+          ? 'без процентов: не с чем сравнить ставку'
+          : 'без процентов: нет'
+      )
+      return
+    }
+
+    await notify(text.title, text.body, { silent: true, tag: IDLE_MONEY_TAG })
+    const count = result.idle.length
+    await trace(
+      `без процентов: ${count} ${pluralize(count, ['счёт', 'счёта', 'счетов'])}, ` +
+        `${result.perDay} ₽ в день` +
+        (fresh ? '' : ', по кэшу')
+    )
+    if (isBackground(trigger)) {
+      await patchBackgroundState({ lastIdle: { day: today, fresh } })
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn('Idle money not reported', error)
+    await trace(`без процентов: ошибка ${message}`)
+  }
 }
 
 /**
@@ -326,7 +418,14 @@ type TNotificationOptions = NotificationOptions & { renotify?: boolean }
 async function notify(
   title: string,
   body: string,
-  { silent = false }: { silent?: boolean } = {}
+  {
+    silent = false,
+    tag = CHECK_TAG,
+  }: {
+    silent?: boolean
+    /** One slot per tag: a later notification replaces the earlier one. */
+    tag?: string
+  } = {}
 ) {
   const options: TNotificationOptions = {
     body,
@@ -338,7 +437,7 @@ async function notify(
     */
     badge: '/icons/badge-96px.png',
     // One slot, so repeated checks replace each other instead of piling up.
-    tag: CHECK_TAG,
+    tag,
     /*
       Replacing a notification under the same tag is silent by default, so a
       success after an earlier failure would arrive unheard without this.
